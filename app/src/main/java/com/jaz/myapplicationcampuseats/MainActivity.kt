@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -33,11 +34,25 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun AppNavigation() {
-    var pantalla by remember { mutableStateOf("splash") }
+    val context = LocalContext.current
+    val prefs = context.getSharedPreferences("campuseats", android.content.Context.MODE_PRIVATE)
+
+    var pantalla by remember {
+        val usuarioGuardado = prefs.getString("usuario", "")
+        mutableStateOf(if (usuarioGuardado.isNullOrEmpty()) "splash" else "home")
+    }
+    var nombreUsuario by remember { mutableStateOf(prefs.getString("usuario", "") ?: "") }
+    var correoUsuario by remember { mutableStateOf(prefs.getString("correo", "") ?: "") }
+    var edadUsuario by remember { mutableStateOf(prefs.getString("edad", "") ?: "") }
+    var categoriaSeleccionada by remember { mutableStateOf("") }
+    var nombreVendedorChat by remember { mutableStateOf("Vendedor") }
+    var carrito by remember { mutableStateOf(listOf<ItemCarrito>()) }
 
     LaunchedEffect(Unit) {
-        delay(3000)
-        pantalla = "login"
+        if (pantalla == "splash") {
+            delay(3000)
+            pantalla = "login"
+        }
     }
 
     when (pantalla) {
@@ -48,18 +63,73 @@ fun AppNavigation() {
         )
         "registro" -> RegistroScreen(
             onVolver = { pantalla = "login" },
-            onEntrar = { pantalla = "home" }
+            onEntrar = { nombre, correo, edad ->
+                nombreUsuario = nombre
+                correoUsuario = correo
+                edadUsuario = edad
+                prefs.edit()
+                    .putString("usuario", nombre)
+                    .putString("correo", correo)
+                    .putString("edad", edad)
+                    .apply()
+                pantalla = "home"
+            }
         )
-        "home" -> HomeScreen(nombre = "Jazmín", onCarrito = { })
+        "home" -> HomeScreen(
+            nombre = nombreUsuario,
+            onCarrito = { pantalla = "carrito" },
+            onCerrarSesion = {
+                prefs.edit().clear().apply()
+                nombreUsuario = ""
+                correoUsuario = ""
+                edadUsuario = ""
+                pantalla = "login"
+            },
+            onCuenta = { pantalla = "cuenta" },
+            onBilletera = { pantalla = "historial" },
+            onCategoria = { cat ->
+                categoriaSeleccionada = cat
+                pantalla = "categoria"
+            },
+            onPublicar = { pantalla = "publicar" },
+            onNotificaciones = { pantalla = "notificaciones" }
+        )
+        "carrito" -> CarritoScreen(
+            items = carrito,
+            onVolver = { pantalla = "home" },
+            onPedir = { }
+        )
+        "cuenta" -> CuentaScreen(
+            usuario = nombreUsuario,
+            correo = correoUsuario,
+            edad = edadUsuario,
+            onVolver = { pantalla = "home" }
+        )
+        "historial" -> HistorialScreen(
+            onVolver = { pantalla = "home" },
+            onChat = { vendedor ->
+                nombreVendedorChat = vendedor
+                pantalla = "chat"
+            }
+        )
+        "categoria" -> CategoriaScreen(
+            categoria = categoriaSeleccionada,
+            onVolver = { pantalla = "home" }
+        )
+        "publicar" -> PublicarScreen(onVolver = { pantalla = "home" })
+        "chat" -> ChatScreen(
+            nombreVendedor = nombreVendedorChat,
+            nombreComprador = nombreUsuario,
+            onVolver = { pantalla = "historial" }
+        )
+        "notificaciones" -> NotificacionesScreen(onVolver = { pantalla = "home" })
     }
 }
 
 @Composable
 fun SplashScreen() {
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(GreenDark),
+        modifier = Modifier.fillMaxSize().background(GreenDark),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -69,15 +139,10 @@ fun SplashScreen() {
             Image(
                 painter = painterResource(id = R.drawable.logo),
                 contentDescription = "Logo CampusEats",
-                modifier = Modifier.size(350.dp)
+                modifier = Modifier.size(180.dp)
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "CampusEats",
-                color = Color.White,
-                fontSize = 36.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Text(text = "CampusEats", color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -146,11 +211,12 @@ fun LoginScreen(onRegistrarme: () -> Unit, onEntrar: () -> Unit) {
 }
 
 @Composable
-fun RegistroScreen(onVolver: () -> Unit, onEntrar: () -> Unit) {
+fun RegistroScreen(onVolver: () -> Unit, onEntrar: (String, String, String) -> Unit) {
     var usuario by remember { mutableStateOf("") }
     var correo by remember { mutableStateOf("") }
     var contrasena by remember { mutableStateOf("") }
     var edad by remember { mutableStateOf("") }
+    var errorMsg by remember { mutableStateOf("") }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Image(
@@ -212,9 +278,29 @@ fun RegistroScreen(onVolver: () -> Unit, onEntrar: () -> Unit) {
                 colors = TextFieldDefaults.colors(unfocusedContainerColor = Color.White, focusedContainerColor = Color.White),
                 shape = RoundedCornerShape(8.dp)
             )
+            if (errorMsg.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(text = errorMsg, color = Color.Red, fontSize = 13.sp)
+            }
             Spacer(modifier = Modifier.height(24.dp))
             Button(
-                onClick = onEntrar,
+                onClick = {
+                    when {
+                        usuario.isEmpty() || correo.isEmpty() || contrasena.isEmpty() || edad.isEmpty() -> {
+                            errorMsg = "Por favor llena todos los campos"
+                        }
+                        !android.util.Patterns.EMAIL_ADDRESS.matcher(correo).matches() -> {
+                            errorMsg = "Ingresa un correo válido"
+                        }
+                        contrasena.length < 6 -> {
+                            errorMsg = "La contraseña debe tener al menos 6 caracteres"
+                        }
+                        else -> {
+                            errorMsg = ""
+                            onEntrar(usuario, correo, edad)
+                        }
+                    }
+                },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(8.dp)
