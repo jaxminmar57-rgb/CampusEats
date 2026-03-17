@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "157355159901",
-    "project_id": "campuseats-99947",
-    "storage_bucket": "campuseats-99947.firebasestorage.app"
+    "project_number": "102143221342",
+    "project_id": "campus-eats-jazmin",
+    "storage_bucket": "campus-eats-jazmin.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:157355159901:android:99da5d97370f7b40eb38b4",
+        "mobilesdk_app_id": "1:102143221342:android:94b9160228097b0a291ecf",
         "android_client_info": {
           "package_name": "com.jaz.myapplicationcampuseats"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyB4o8Ux9UzDhcRC6FKqSrueQtUz-jiLq_c"
+          "current_key": "AIzaSyD8wcFZ5ejVxWvwgEFXXiTpZzmCbYwqmIA"
         }
       ],
       "services": {

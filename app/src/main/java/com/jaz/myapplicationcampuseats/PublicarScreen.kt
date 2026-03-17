@@ -1,5 +1,8 @@
 package com.jaz.myapplicationcampuseats
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -15,39 +18,74 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import com.jaz.myapplicationcampuseats.model.Producto
+import com.jaz.myapplicationcampuseats.repository.ImageRepository
+import com.jaz.myapplicationcampuseats.repository.ProductoRepository
 
 @Composable
 fun PublicarScreen(onVolver: () -> Unit) {
+
     var nombre by remember { mutableStateOf("") }
     var precio by remember { mutableStateOf("") }
     var descripcion by remember { mutableStateOf("") }
     var lugarEntrega by remember { mutableStateOf("") }
+
     var categoriaSeleccionada by remember { mutableStateOf("Hamburguesas") }
+
     var publicado by remember { mutableStateOf(false) }
+
     var menuCategoriaAbierto by remember { mutableStateOf(false) }
 
+    var imagenUri by remember { mutableStateOf<Uri?>(null) }
+
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        imagenUri = uri
+    }
+
     if (publicado) {
+
         Box(
             modifier = Modifier.fillMaxSize().background(DarkBg),
             contentAlignment = Alignment.Center
         ) {
+
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(text = "✅", fontSize = 60.sp)
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(text = "¡Publicado con éxito!", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(text = "Tu comida ya está visible para los compradores", color = Color.Gray, fontSize = 14.sp)
-                Spacer(modifier = Modifier.height(32.dp))
+
+                Text("✅", fontSize = 60.sp)
+
+                Spacer(Modifier.height(16.dp))
+
+                Text(
+                    "¡Publicado con éxito!",
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                Text(
+                    "Tu comida ya está visible para los compradores",
+                    color = Color.Gray
+                )
+
+                Spacer(Modifier.height(32.dp))
+
                 Button(
                     onClick = onVolver,
-                    colors = ButtonDefaults.buttonColors(containerColor = GreenBtn),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth(0.7f)
+                    colors = ButtonDefaults.buttonColors(containerColor = GreenBtn)
                 ) {
-                    Text(text = "Volver al inicio", color = Color.White, fontSize = 16.sp)
+                    Text("Volver al inicio", color = Color.White)
                 }
+
             }
         }
+
         return
     }
 
@@ -57,159 +95,151 @@ fun PublicarScreen(onVolver: () -> Unit) {
             .background(DarkBg)
             .verticalScroll(rememberScrollState())
     ) {
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+
             IconButton(onClick = onVolver) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Volver", tint = Color.White)
+                Icon(Icons.Default.ArrowBack, "volver", tint = Color.White)
             }
-            Text(text = "Publicar comida", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
+
+            Text(
+                "Publicar comida",
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
 
-        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        Column(Modifier.padding(16.dp)) {
 
-            Text(text = "Nombre del platillo:", color = Color.White, fontSize = 14.sp)
-            Spacer(modifier = Modifier.height(4.dp))
+            Text("Nombre del platillo:", color = Color.White)
+
             OutlinedTextField(
                 value = nombre,
                 onValueChange = { nombre = it },
-                placeholder = { Text("Ej: Burrito de pollo", color = Color.Gray) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedTextColor = Color.White,
-                    focusedTextColor = Color.White,
-                    unfocusedBorderColor = Color.Gray,
-                    focusedBorderColor = GreenBtn,
-                    unfocusedContainerColor = Color(0xFF2D2D44),
-                    focusedContainerColor = Color(0xFF2D2D44)
-                )
+                modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(Modifier.height(16.dp))
 
-            Text(text = "Precio ($):", color = Color.White, fontSize = 14.sp)
-            Spacer(modifier = Modifier.height(4.dp))
+            Text("Precio:", color = Color.White)
+
             OutlinedTextField(
                 value = precio,
                 onValueChange = { precio = it },
-                placeholder = { Text("Ej: 45", color = Color.Gray) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedTextColor = Color.White,
-                    focusedTextColor = Color.White,
-                    unfocusedBorderColor = Color.Gray,
-                    focusedBorderColor = GreenBtn,
-                    unfocusedContainerColor = Color(0xFF2D2D44),
-                    focusedContainerColor = Color(0xFF2D2D44)
-                )
+                modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(Modifier.height(16.dp))
 
-            Text(text = "Categoría:", color = Color.White, fontSize = 14.sp)
-            Spacer(modifier = Modifier.height(4.dp))
-            Box {
-                OutlinedTextField(
-                    value = categoriaSeleccionada,
-                    onValueChange = {},
-                    readOnly = true,
-                    placeholder = { Text("Selecciona una categoría", color = Color.Gray) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    trailingIcon = {
-                        IconButton(onClick = { menuCategoriaAbierto = true }) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = null, tint = Color.Gray,
-                                modifier = Modifier.size(20.dp))
-                        }
-                    },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        unfocusedTextColor = Color.White,
-                        focusedTextColor = Color.White,
-                        unfocusedBorderColor = Color.Gray,
-                        focusedBorderColor = GreenBtn,
-                        unfocusedContainerColor = Color(0xFF2D2D44),
-                        focusedContainerColor = Color(0xFF2D2D44)
-                    )
-                )
-                DropdownMenu(
-                    expanded = menuCategoriaAbierto,
-                    onDismissRequest = { menuCategoriaAbierto = false },
-                    modifier = Modifier.background(Color(0xFF2D2D44))
-                ) {
-                    categorias.forEach { (cat, _) ->
-                        DropdownMenuItem(
-                            text = { Text(text = cat, color = Color.White) },
-                            onClick = {
-                                categoriaSeleccionada = cat
-                                menuCategoriaAbierto = false
-                            }
-                        )
-                    }
-                }
-            }
+            Text("Descripción:", color = Color.White)
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(text = "Lugar de entrega:", color = Color.White, fontSize = 14.sp)
-            Spacer(modifier = Modifier.height(4.dp))
-            OutlinedTextField(
-                value = lugarEntrega,
-                onValueChange = { lugarEntrega = it },
-                placeholder = { Text("Ej: Cafetería principal, Edificio A", color = Color.Gray) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedTextColor = Color.White,
-                    focusedTextColor = Color.White,
-                    unfocusedBorderColor = Color.Gray,
-                    focusedBorderColor = GreenBtn,
-                    unfocusedContainerColor = Color(0xFF2D2D44),
-                    focusedContainerColor = Color(0xFF2D2D44)
-                )
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(text = "Descripción y especificaciones:", color = Color.White, fontSize = 14.sp)
-            Spacer(modifier = Modifier.height(4.dp))
             OutlinedTextField(
                 value = descripcion,
                 onValueChange = { descripcion = it },
-                placeholder = { Text("Ej: Incluye arroz y frijoles, sin picante", color = Color.Gray) },
-                modifier = Modifier.fillMaxWidth().height(120.dp),
-                shape = RoundedCornerShape(12.dp),
-                maxLines = 5,
-                colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedTextColor = Color.White,
-                    focusedTextColor = Color.White,
-                    unfocusedBorderColor = Color.Gray,
-                    focusedBorderColor = GreenBtn,
-                    unfocusedContainerColor = Color(0xFF2D2D44),
-                    focusedContainerColor = Color(0xFF2D2D44)
-                )
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp)
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(Modifier.height(16.dp))
 
             Button(
-                onClick = {
-                    if (nombre.isNotEmpty() && precio.isNotEmpty() && lugarEntrega.isNotEmpty()) {
-                        publicado = true
-                    }
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = GreenBtn),
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
+                onClick = { launcher.launch("image/*") }
             ) {
-                Text(text = "Publicar", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text("Seleccionar imagen")
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            imagenUri?.let {
+
+                Spacer(Modifier.height(12.dp))
+
+                AsyncImage(
+                    model = it,
+                    contentDescription = "Imagen",
+                    modifier = Modifier.size(150.dp)
+                )
+            }
+
+            Spacer(Modifier.height(32.dp))
+
+            Button(
+
+                onClick = {
+
+                    val userId =
+                        FirebaseAuth.getInstance().currentUser?.uid ?: return@Button
+
+                    val productoId =
+                        FirebaseFirestore.getInstance()
+                            .collection("productos")
+                            .document()
+                            .id
+
+                    imagenUri?.let { uri ->
+
+                        ImageRepository.subirImagenProducto(
+                            uri,
+                            productoId,
+
+                            onSuccess = { imageUrl ->
+
+                                val producto = Producto(
+
+                                    id = productoId,
+
+                                    nombre = nombre,
+
+                                    descripcion = descripcion,
+
+                                    precio = precio.toDoubleOrNull() ?: 0.0,
+
+                                    imagenUrl = imageUrl,
+
+                                    categoria = categoriaSeleccionada,
+
+                                    vendedorId = userId
+                                )
+
+                                ProductoRepository.publicarProducto(
+                                    producto,
+                                    onSuccess = {
+
+                                        publicado = true
+
+                                    },
+                                    onError = {
+
+                                    }
+                                )
+                            },
+
+                            onError = {
+
+                            }
+                        )
+
+                    }
+
+                },
+
+                colors = ButtonDefaults.buttonColors(containerColor = GreenBtn),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+
+                Text(
+                    "Publicar",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(Modifier.height(24.dp))
         }
     }
 }

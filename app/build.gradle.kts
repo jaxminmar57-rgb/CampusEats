@@ -2,7 +2,8 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     id("com.google.devtools.ksp")
-    id("com.google.gms.google-services") version "4.4.2" apply false
+    id("com.google.gms.google-services")
+
 }
 
 android {
@@ -70,5 +71,18 @@ dependencies {
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+
+    // Firebase BoM
+    implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
+
+// Firestore
+    implementation("com.google.firebase:firebase-firestore-ktx")
+
+// Auth
+    implementation("com.google.firebase:firebase-auth-ktx")
+
+// Storage (para fotos de comida)
+    implementation("com.google.firebase:firebase-storage-ktx")
+    implementation("io.coil-kt:coil-compose:2.6.0")
 
 }
