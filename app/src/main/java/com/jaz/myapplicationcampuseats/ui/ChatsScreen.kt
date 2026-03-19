@@ -18,60 +18,32 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.jaz.myapplicationcampuseats.model.Pedido
-import com.jaz.myapplicationcampuseats.repository.ChatRepository
-import com.jaz.myapplicationcampuseats.repository.PedidoRepository
+import com.jaz.myapplicationcampuseats.viewmodel.ChatsViewModel
 
 @Composable
 fun ChatsScreen(
     userId: String,
     onVolver: () -> Unit,
-    onAbrirChat: (pedidoId: String, otroNombre: String) -> Unit
+    onAbrirChat: (pedidoId: String, otroNombre: String) -> Unit,
+    vm: ChatsViewModel = viewModel()
 ) {
-    val context = LocalContext.current
+    LaunchedEffect(userId) { vm.iniciarListeners(userId) }
 
-    var pedidosComoCliente  by remember { mutableStateOf<List<Pedido>>(emptyList()) }
-    var pedidosComoVendedor by remember { mutableStateOf<List<Pedido>>(emptyList()) }
-    var cargando by remember { mutableStateOf(true) }
-    var filtro   by remember { mutableStateOf("activos") }
+    var filtro by remember { mutableStateOf("activos") }
 
-    var mensajesNuevos by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
-    val ultimoLeido = remember { mutableStateMapOf<String, Long>() }
-
-    DisposableEffect(userId) {
-        val lc = PedidoRepository.escucharPedidosCliente(userId)  { lista -> pedidosComoCliente  = lista; cargando = false }
-        val lv = PedidoRepository.escucharPedidosVendedor(userId) { lista -> pedidosComoVendedor = lista }
-        onDispose { lc.remove(); lv.remove() }
-    }
-
-    val todosPedidos = remember(pedidosComoCliente, pedidosComoVendedor) {
-        (pedidosComoCliente + pedidosComoVendedor).distinctBy { it.id }.sortedByDescending { it.fecha }
-    }
+    val todosPedidos = vm.todosPedidos
+    val cargando = vm.cargando
+    val totalNuevos = vm.totalNuevos
 
     val pedidosFiltrados = remember(todosPedidos, filtro) {
         if (filtro == "activos") todosPedidos.filter { it.estado !in listOf("completado", "cancelado") }
         else todosPedidos
     }
-
-    DisposableEffect(todosPedidos, userId) {
-        val pedidosActivos = todosPedidos.filter { it.estado !in listOf("completado", "cancelado") }
-        val listeners = pedidosActivos.map { pedido ->
-            ChatRepository.escucharMensajes(pedido.id) { mensajes ->
-                val leido    = ultimoLeido[pedido.id] ?: 0L
-                val nuevos   = mensajes.count { it.autorId != userId && it.timestamp > leido }
-                val anterior = mensajesNuevos[pedido.id] ?: 0
-                if (nuevos > anterior && anterior >= 0) reproducirSonidoMensaje(context)
-                mensajesNuevos = mensajesNuevos.toMutableMap().also { it[pedido.id] = nuevos }
-            }
-        }
-        onDispose { listeners.forEach { it.remove() } }
-    }
-
-    val totalNuevos = mensajesNuevos.values.sum()
 
     Column(modifier = Modifier.fillMaxSize().background(DarkBg)) {
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
@@ -106,14 +78,13 @@ fun ChatsScreen(
                     val esVendedor = pedido.vendedorId == userId
                     val otroNombre = if (esVendedor) pedido.nombreCliente else pedido.nombreVendedor
                     val rolPropio  = if (esVendedor) "Vendedor" else "Cliente"
-                    val nuevos     = mensajesNuevos[pedido.id] ?: 0
+                    val nuevos     = vm.mensajesNuevos[pedido.id] ?: 0
 
                     ChatResumenCard(
                         pedido = pedido, otroNombre = otroNombre, rolPropio = rolPropio,
                         mensajesNuevos = nuevos,
                         onClick = {
-                            ultimoLeido[pedido.id] = System.currentTimeMillis()
-                            mensajesNuevos = mensajesNuevos.toMutableMap().also { it[pedido.id] = 0 }
+                            vm.marcarLeido(pedido.id)
                             onAbrirChat(pedido.id, otroNombre)
                         }
                     )

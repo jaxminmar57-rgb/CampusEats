@@ -25,22 +25,19 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.jaz.myapplicationcampuseats.R
 import com.jaz.myapplicationcampuseats.model.Pedido
 import com.jaz.myapplicationcampuseats.model.Producto
 import com.jaz.myapplicationcampuseats.model.Usuario
-import com.jaz.myapplicationcampuseats.repository.ChatRepository
-import com.jaz.myapplicationcampuseats.repository.NotificacionesRepository
-import com.jaz.myapplicationcampuseats.repository.PedidoRepository
-import com.jaz.myapplicationcampuseats.repository.ProductoRepository
 import com.jaz.myapplicationcampuseats.repository.UsuarioRepository
+import com.jaz.myapplicationcampuseats.viewmodel.HomeViewModel
 
 val todasCategorias = listOf(
     Pair("Hamburguesas", R.drawable.hamburguesa),
@@ -69,89 +66,29 @@ fun HomeScreen(
     onChats: () -> Unit,
     onAbrirPedido: (String) -> Unit,
     onAbrirChat: (pedidoId: String, otroNombre: String) -> Unit,
-    onVerTienda: (vendedorId: String) -> Unit
+    onVerTienda: (vendedorId: String) -> Unit,
+    vm: HomeViewModel = viewModel()
 ) {
-    val uid     = usuario?.uid ?: ""
-    val context = LocalContext.current
+    val uid = usuario?.uid ?: ""
 
+    // Iniciar listeners UNA vez (sobrevive rotación, recomposición, etc.)
+    LaunchedEffect(uid) { vm.iniciarListeners(uid) }
+
+    // Estado local de UI (no es lógica de negocio)
     var busqueda     by remember { mutableStateOf("") }
     var menuAbierto  by remember { mutableStateOf(false) }
     var fabExpandido by remember { mutableStateOf(false) }
-    var productos    by remember { mutableStateOf<List<Producto>>(emptyList()) }
-    var cargando     by remember { mutableStateOf(true) }
     var mostrarDialogoUbicacion by remember { mutableStateOf(false) }
     var nuevaUbicacion by remember { mutableStateOf(usuario?.ubicacionDescripcion ?: "") }
     var guardandoUbicacion by remember { mutableStateOf(false) }
 
-    var pedidosActivosCliente  by remember { mutableStateOf<List<Pedido>>(emptyList()) }
-    var pedidosActivosVendedor by remember { mutableStateOf<List<Pedido>>(emptyList()) }
-    val pedidosActivos = remember(pedidosActivosCliente, pedidosActivosVendedor) {
-        (pedidosActivosCliente + pedidosActivosVendedor).distinctBy { it.id }
-    }
-
-    var carritoCount  by remember { mutableStateOf(0) }
-    var notifNoLeidas by remember { mutableStateOf(0) }
-
-    // Mapa pedidoId → mensajes nuevos (igual estructura que ChatsScreen para consistencia)
-    val mensajesNuevosMapa = remember { mutableStateMapOf<String, Int>() }
-    val ultimoLeido        = remember { mutableStateMapOf<String, Long>() }
-    val mensajesNuevosTotal by derivedStateOf { mensajesNuevosMapa.values.sum() }
-
-    // ── Listeners ──────────────────────────────────────────────────────────────
-
-    DisposableEffect(Unit) {
-        val l = ProductoRepository.escucharProductosDisponibles { lista -> productos = lista; cargando = false }
-        onDispose { l.remove() }
-    }
-
-    DisposableEffect(uid) {
-        if (uid.isEmpty()) return@DisposableEffect onDispose {}
-        val lc = PedidoRepository.escucharPedidosCliente(uid) { lista ->
-            pedidosActivosCliente = lista.filter { it.estado !in listOf("completado", "cancelado") }
-        }
-        onDispose { lc.remove() }
-    }
-
-    DisposableEffect(uid) {
-        if (uid.isEmpty()) return@DisposableEffect onDispose {}
-        val lv = PedidoRepository.escucharPedidosVendedor(uid) { lista ->
-            pedidosActivosVendedor = lista.filter { it.estado !in listOf("completado", "cancelado") }
-        }
-        onDispose { lv.remove() }
-    }
-
-    // Carrito en tiempo real
-    DisposableEffect(uid) {
-        if (uid.isEmpty()) return@DisposableEffect onDispose {}
-        val ref = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-            .collection("usuarios").document(uid).collection("carrito")
-        val l = ref.addSnapshotListener { snap, _ -> carritoCount = snap?.size() ?: 0 }
-        onDispose { l.remove() }
-    }
-
-    // Mensajes nuevos — snapshot individual por pedido activo
-    // Usando mapa para sumar correctamente (igual que ChatsScreen)
-    DisposableEffect(pedidosActivos, uid) {
-        val listeners = pedidosActivos.map { pedido ->
-            ChatRepository.escucharMensajes(pedido.id) { mensajes ->
-                val leido  = ultimoLeido[pedido.id] ?: 0L
-                val nuevos = mensajes.count { it.autorId != uid && it.timestamp > leido }
-                val anterior = mensajesNuevosMapa[pedido.id] ?: 0
-                if (nuevos > anterior) reproducirSonidoMensaje(context)
-                mensajesNuevosMapa[pedido.id] = nuevos
-            }
-        }
-        onDispose { listeners.forEach { it.remove() } }
-    }
-
-    // Notificaciones no leídas (sin chat)
-    DisposableEffect(uid) {
-        if (uid.isEmpty()) return@DisposableEffect onDispose {}
-        val l = NotificacionesRepository.escucharNotificaciones(uid) { lista ->
-            notifNoLeidas = lista.count { !it.leida && it.tipo != "chat" }
-        }
-        onDispose { l.remove() }
-    }
+    // Estado del ViewModel (reactivo)
+    val productos       = vm.productos
+    val cargando        = vm.cargando
+    val pedidosActivos  = vm.pedidosActivos
+    val carritoCount    = vm.carritoCount
+    val notifNoLeidas   = vm.notifNoLeidas
+    val mensajesNuevosTotal = vm.mensajesNuevosTotal
 
     // ── Datos derivados ────────────────────────────────────────────────────────
     val categoriasConProductos = remember(productos) {
@@ -194,7 +131,7 @@ fun HomeScreen(
                 Button(
                     onClick = {
                         guardandoUbicacion = true
-                        UsuarioRepository.actualizarUbicacion(uid, nuevaUbicacion.trim()) {
+                        vm.actualizarUbicacion(nuevaUbicacion.trim()) {
                             guardandoUbicacion = false
                             mostrarDialogoUbicacion = false
                         }

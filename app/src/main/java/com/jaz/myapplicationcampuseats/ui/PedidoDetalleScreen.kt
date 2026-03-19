@@ -17,12 +17,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.jaz.myapplicationcampuseats.model.Pedido
 import com.jaz.myapplicationcampuseats.model.Resena
 import com.jaz.myapplicationcampuseats.model.Usuario
-import com.jaz.myapplicationcampuseats.repository.PedidoRepository
 import com.jaz.myapplicationcampuseats.repository.ResenaRepository
-import com.jaz.myapplicationcampuseats.repository.UsuarioRepository
+import com.jaz.myapplicationcampuseats.viewmodel.PedidoDetalleViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -32,35 +32,20 @@ fun PedidoDetalleScreen(
     pedidoId: String,
     usuarioActual: Usuario?,
     onVolver: () -> Unit,
-    onChat: (otroNombre: String) -> Unit
+    onChat: (otroNombre: String) -> Unit,
+    vm: PedidoDetalleViewModel = viewModel()
 ) {
-    var pedido  by remember { mutableStateOf<Pedido?>(null) }
-    var cargando by remember { mutableStateOf(true) }
-    var procesando by remember { mutableStateOf(false) }
-    var mostrarDialogoResena by remember { mutableStateOf(false) }
-    var yaCalificaron by remember { mutableStateOf(false) }
-    var ubicacionVendedor by remember { mutableStateOf("") }
-
     val uid = usuarioActual?.uid ?: ""
+    var mostrarDialogoResena by remember { mutableStateOf(false) }
 
-    DisposableEffect(pedidoId) {
-        val listener = PedidoRepository.escucharPedido(pedidoId) { p ->
-            pedido = p; cargando = false
-            // Si el cliente recoge, cargar ubicación del vendedor
-            if (p != null && p.preferenciaEntrega == "cliente_recoge") {
-                UsuarioRepository.obtenerUsuario(p.vendedorId, onSuccess = { v ->
-                    ubicacionVendedor = v.ubicacionDescripcion
-                })
-            }
-        }
-        onDispose { listener.remove() }
-    }
+    // Iniciar listener UNA vez
+    LaunchedEffect(pedidoId, uid) { vm.iniciarListener(pedidoId, uid) }
 
-    LaunchedEffect(pedido?.estado) {
-        if (pedido?.estado == "completado" && uid.isNotEmpty()) {
-            ResenaRepository.yaCalificoPedido(pedidoId, uid) { yaCalificaron = it }
-        }
-    }
+    val pedido = vm.pedido
+    val cargando = vm.cargando
+    val procesando = vm.procesando
+    val yaCalificaron = vm.yaCalificaron
+    val ubicacionVendedor = vm.ubicacionVendedor
 
     if (cargando) {
         Box(modifier = Modifier.fillMaxSize().background(DarkBg), contentAlignment = Alignment.Center) {
@@ -93,7 +78,7 @@ fun PedidoDetalleScreen(
         DialogoResena(pedido = p, autorId = uid, autorNombre = usuarioActual?.nombre ?: "",
             esVendedor = esVendedor,
             onDismiss = { mostrarDialogoResena = false },
-            onEnviado = { yaCalificaron = true; mostrarDialogoResena = false })
+            onEnviado = { vm.marcarCalificado(); mostrarDialogoResena = false })
     }
 
     Column(modifier = Modifier.fillMaxSize().background(DarkBg)) {
@@ -230,11 +215,11 @@ fun PedidoDetalleScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     AccionesVendedor(
                         estado = p.estado, procesando = procesando, vendedorConfirmo = p.vendedorConfirmoEntrega,
-                        onAceptar = { procesando = true; PedidoRepository.cambiarEstado(pedidoId, "aceptado") { procesando = false } },
-                        onEspera  = { procesando = true; PedidoRepository.cambiarEstado(pedidoId, "en_espera") { procesando = false } },
-                        onListo   = { procesando = true; PedidoRepository.cambiarEstado(pedidoId, "listo") { procesando = false } },
-                        onCancelar = { procesando = true; PedidoRepository.cambiarEstado(pedidoId, "cancelado") { procesando = false } },
-                        onConfirmarEntrega = { procesando = true; PedidoRepository.vendedorConfirmaEntrega(pedidoId) { procesando = false } }
+                        onAceptar = { vm.cambiarEstado("aceptado") },
+                        onEspera  = { vm.cambiarEstado("en_espera") },
+                        onListo   = { vm.cambiarEstado("listo") },
+                        onCancelar = { vm.cambiarEstado("cancelado") },
+                        onConfirmarEntrega = { vm.vendedorConfirma() }
                     )
                 }
             }
@@ -243,7 +228,7 @@ fun PedidoDetalleScreen(
             if (esCliente && p.estado in listOf("listo", "aceptado") && !p.clienteConfirmoEntrega) {
                 item {
                     Button(
-                        onClick = { procesando = true; PedidoRepository.clienteConfirmaEntrega(pedidoId) { procesando = false } },
+                        onClick = { vm.clienteConfirma() },
                         modifier = Modifier.fillMaxWidth().height(50.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = GreenBtn),
