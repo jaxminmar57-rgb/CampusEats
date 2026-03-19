@@ -12,20 +12,55 @@ object CarritoRepository {
         .document(userId)
         .collection("carrito")
 
-    fun agregarProducto(userId: String, item: ItemCarrito) {
+    /**
+     * Agrega producto al carrito.
+     * Si ya existe, incrementa cantidad.
+     * Si hay items de otro vendedor, llama a onConflictoVendedor
+     * para que la UI pregunte al usuario si desea vaciar y agregar.
+     */
+    fun agregarProducto(
+        userId: String,
+        item: ItemCarrito,
+        onSuccess: () -> Unit = {},
+        onConflictoVendedor: (vendedorActual: String) -> Unit = {}
+    ) {
         val ref = carritoRef(userId)
-        // Si ya existe el producto, aumenta cantidad
-        ref.whereEqualTo("productoId", item.productoId).get()
-            .addOnSuccessListener { result ->
-                if (!result.isEmpty) {
-                    val doc = result.documents.first()
-                    val cantidadActual = doc.getLong("cantidad")?.toInt() ?: 1
-                    ref.document(doc.id).update("cantidad", cantidadActual + 1)
-                } else {
-                    val doc = ref.document()
-                    doc.set(item.copy(id = doc.id))
-                }
+        ref.get().addOnSuccessListener { snapshot ->
+            val itemsExistentes = snapshot.documents.mapNotNull {
+                it.toObject(ItemCarrito::class.java)
             }
+
+            // Validar: si hay items de otro vendedor, notificar conflicto
+            val vendedorExistente = itemsExistentes.firstOrNull()?.vendedorId
+            if (vendedorExistente != null && vendedorExistente != item.vendedorId) {
+                onConflictoVendedor(
+                    itemsExistentes.firstOrNull()?.nombreVendedor ?: vendedorExistente
+                )
+                return@addOnSuccessListener
+            }
+
+            // Buscar si el producto ya está en el carrito
+            val existente = itemsExistentes.firstOrNull { it.productoId == item.productoId }
+            if (existente != null) {
+                ref.document(existente.id)
+                    .update("cantidad", existente.cantidad + 1)
+                    .addOnSuccessListener { onSuccess() }
+            } else {
+                val doc = ref.document()
+                doc.set(item.copy(id = doc.id))
+                    .addOnSuccessListener { onSuccess() }
+            }
+        }
+    }
+
+    /**
+     * Vacía el carrito y luego agrega el nuevo item (para resolver conflicto de vendedor).
+     */
+    fun vaciarYAgregar(userId: String, item: ItemCarrito, onSuccess: () -> Unit = {}) {
+        vaciarCarrito(userId)
+        val ref = carritoRef(userId)
+        val doc = ref.document()
+        doc.set(item.copy(id = doc.id)).addOnSuccessListener { onSuccess() }
     }
 
     fun obtenerCarrito(userId: String, onResult: (List<ItemCarrito>) -> Unit) {
@@ -33,6 +68,7 @@ object CarritoRepository {
             .addOnSuccessListener { result ->
                 onResult(result.documents.mapNotNull { it.toObject(ItemCarrito::class.java) })
             }
+            .addOnFailureListener { onResult(emptyList()) }
     }
 
     fun eliminarItem(userId: String, itemId: String) {

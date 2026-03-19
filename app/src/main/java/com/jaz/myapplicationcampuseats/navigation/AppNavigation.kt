@@ -1,6 +1,12 @@
 package com.jaz.myapplicationcampuseats.navigation
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -28,11 +34,13 @@ object Routes {
     const val PUBLICAR = "publicar"
     const val MIS_PUBLICACIONES = "mis_publicaciones"
     const val CHATS = "chats"
+    const val EDITAR_PRODUCTO = "editar_producto/{productoId}"
     const val TIENDA = "tienda/{vendedorId}"
     const val PERFIL = "perfil/{uid}"
 
     fun categoria(cat: String) = "categoria/$cat"
     fun pedidoDetalle(pedidoId: String) = "pedido/$pedidoId"
+    fun editarProducto(productoId: String) = "editar_producto/$productoId"
     fun chat(pedidoId: String, otroNombre: String) = "chat/$pedidoId/$otroNombre"
     fun tienda(vendedorId: String) = "tienda/$vendedorId"
     fun perfil(uid: String) = "perfil/$uid"
@@ -204,7 +212,8 @@ fun AppNavigation(
                 pedidoId = pedidoId,
                 usuarioActual = usuarioActual,
                 otroNombre = otroNombre,
-                onVolver = { navController.popBackStack() }
+                onVolver = { navController.popBackStack() },
+                onVerPedido = { navController.navigate(Routes.pedidoDetalle(pedidoId)) }
             )
         }
 
@@ -264,7 +273,10 @@ fun AppNavigation(
         composable(Routes.MIS_PUBLICACIONES) {
             MisPublicacionesScreen(
                 vendedorId = usuarioActual?.uid ?: "",
-                onVolver = { navController.popBackStack() }
+                onVolver = { navController.popBackStack() },
+                onEditar = { producto ->
+                    navController.navigate(Routes.editarProducto(producto.id))
+                }
             )
         }
 
@@ -302,6 +314,34 @@ fun AppNavigation(
                 onVolver = { navController.popBackStack() },
                 onVerTienda = { vendedorId -> navController.navigate(Routes.tienda(vendedorId)) }
             )
+        }
+   
+
+        composable(
+            route = Routes.EDITAR_PRODUCTO,
+            arguments = listOf(navArgument("productoId") { type = NavType.StringType })
+        ) { backStack ->
+            val productoId = backStack.arguments?.getString("productoId") ?: ""
+            var productoEditar by remember { mutableStateOf<com.jaz.myapplicationcampuseats.model.Producto?>(null) }
+            LaunchedEffect(productoId) {
+                com.jaz.myapplicationcampuseats.repository.ProductoRepository
+                    .obtenerProductosDelVendedor(usuarioActual?.uid ?: "") { lista ->
+                        productoEditar = lista.firstOrNull { it.id == productoId }
+                    }
+            }
+            if (productoEditar != null) {
+                PublicarScreen(
+                    userId = usuarioActual?.uid ?: "",
+                    nombreVendedor = usuarioActual?.nombre ?: "",
+                    onVolver = { navController.popBackStack() },
+                    productoExistente = productoEditar
+                )
+            } else {
+                Box(
+                    modifier = Modifier.fillMaxSize().background(DarkBg),
+                    contentAlignment = Alignment.Center
+                ) { CircularProgressIndicator(color = GreenBtn) }
+            }
         }
     }
 }

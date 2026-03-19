@@ -6,93 +6,69 @@ import com.jaz.myapplicationcampuseats.model.Usuario
 
 object UsuarioRepository {
 
-    private val db = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
-    private val usuariosRef = db.collection("usuarios")
-
-    val currentUserId: String
-        get() = auth.currentUser?.uid ?: ""
+    private val db   = FirebaseFirestore.getInstance()
+    private val usersRef = db.collection("usuarios")
 
     fun registrar(
-        correo: String,
-        password: String,
-        nombre: String,
-        edad: String,
-        fotoPerfil: String,
-        telefono: String = "",
-        sexo: String = "",
-        onSuccess: (Usuario) -> Unit,
-        onError: (String) -> Unit
+        nombre: String, correo: String, password: String,
+        onSuccess: (Usuario) -> Unit, onError: (String) -> Unit
     ) {
         auth.createUserWithEmailAndPassword(correo, password)
             .addOnSuccessListener { result ->
-                val uid = result.user?.uid ?: return@addOnSuccessListener
-                val usuario = Usuario(
-                    uid = uid,
-                    nombre = nombre,
-                    correo = correo,
-                    edad = edad,
-                    fotoPerfil = fotoPerfil,
-                    telefono = telefono,
-                    sexo = sexo
-                )
-                usuariosRef.document(uid).set(usuario)
+                val uid     = result.user?.uid ?: return@addOnSuccessListener
+                val usuario = Usuario(uid = uid, nombre = nombre, correo = correo)
+                usersRef.document(uid).set(usuario)
                     .addOnSuccessListener { onSuccess(usuario) }
-                    .addOnFailureListener { onError(it.message ?: "Error al guardar perfil") }
+                    .addOnFailureListener { onError(it.message ?: "Error") }
             }
-            .addOnFailureListener { onError(it.message ?: "Error al registrar") }
+            .addOnFailureListener { onError(it.message ?: "Error") }
     }
 
-    fun login(
-        correo: String,
-        password: String,
-        onSuccess: (Usuario) -> Unit,
-        onError: (String) -> Unit
-    ) {
+    fun login(correo: String, password: String, onSuccess: (Usuario) -> Unit, onError: (String) -> Unit) {
         auth.signInWithEmailAndPassword(correo, password)
             .addOnSuccessListener { result ->
                 val uid = result.user?.uid ?: return@addOnSuccessListener
-                obtenerUsuario(uid, onSuccess) { onError("Error al obtener perfil") }
+                obtenerUsuario(uid, onSuccess = onSuccess, onError = { onError(it) })
             }
-            .addOnFailureListener { onError(it.message ?: "Correo o contraseña incorrectos") }
+            .addOnFailureListener { onError(it.message ?: "Error") }
     }
 
-    fun obtenerUsuario(
-        uid: String,
-        onSuccess: (Usuario) -> Unit,
-        onError: () -> Unit = {}
-    ) {
-        usuariosRef.document(uid).get()
+    fun obtenerUsuario(uid: String, onSuccess: (Usuario) -> Unit, onError: (String) -> Unit = {}) {
+        usersRef.document(uid).get()
             .addOnSuccessListener { doc ->
                 val usuario = doc.toObject(Usuario::class.java)
-                if (usuario != null) onSuccess(usuario) else onError()
+                if (usuario != null) onSuccess(usuario) else onError("Usuario no encontrado")
             }
-            .addOnFailureListener { onError() }
+            .addOnFailureListener { onError(it.message ?: "Error") }
     }
 
-    fun obtenerUsuarioActual(
-        onSuccess: (Usuario) -> Unit,
-        onError: () -> Unit = {}
-    ) {
-        val uid = currentUserId
-        if (uid.isEmpty()) { onError(); return }
+    fun obtenerUsuarioActual(onSuccess: (Usuario) -> Unit, onError: (String) -> Unit = {}) {
+        val uid = auth.currentUser?.uid ?: return
         obtenerUsuario(uid, onSuccess, onError)
     }
 
     fun actualizarPerfil(
-        uid: String,
-        campos: Map<String, Any>,
-        onSuccess: () -> Unit = {},
-        onError: (String) -> Unit = {}
+        uid: String, campos: Map<String, Any>,
+        onSuccess: () -> Unit = {}, onError: (String) -> Unit = {}
     ) {
-        usuariosRef.document(uid).update(campos)
+        usersRef.document(uid).update(campos)
             .addOnSuccessListener { onSuccess() }
             .addOnFailureListener { onError(it.message ?: "Error") }
     }
 
-    fun cerrarSesion() {
-        auth.signOut()
+    /** Actualiza rápidamente la ubicación del vendedor (descripción de texto). */
+    fun actualizarUbicacion(
+        uid: String,
+        descripcion: String,
+        onSuccess: () -> Unit = {}
+    ) {
+        usersRef.document(uid)
+            .update("ubicacionDescripcion", descripcion)
+            .addOnSuccessListener { onSuccess() }
     }
+
+    fun cerrarSesion() { auth.signOut() }
 
     fun hayUsuarioLogueado(): Boolean = auth.currentUser != null
 }

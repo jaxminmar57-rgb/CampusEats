@@ -1,6 +1,5 @@
 package com.jaz.myapplicationcampuseats.ui
 
-import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -34,54 +33,87 @@ fun TiendaScreen(
     onVerPerfil: (uid: String) -> Unit,
     onCarrito: () -> Unit
 ) {
-    var tienda by remember { mutableStateOf<Tienda?>(null) }
-    var cargando by remember { mutableStateOf(true) }
-    var snackMsg by remember { mutableStateOf("") }
+    var tienda     by remember { mutableStateOf<Tienda?>(null) }
+    var cargando   by remember { mutableStateOf(true) }
+    var snackMsg   by remember { mutableStateOf("") }
+    var carritoCount by remember { mutableStateOf(0) }
     val snackState = remember { SnackbarHostState() }
 
+    // Diálogo de conflicto de vendedor
+    var mostrarDialogoConflicto by remember { mutableStateOf(false) }
+    var vendedorConflicto by remember { mutableStateOf("") }
+    var itemPendiente by remember { mutableStateOf<ItemCarrito?>(null) }
+
     LaunchedEffect(snackMsg) {
-        if (snackMsg.isNotEmpty()) {
-            snackState.showSnackbar(snackMsg)
-            snackMsg = ""
-        }
+        if (snackMsg.isNotEmpty()) { snackState.showSnackbar(snackMsg); snackMsg = "" }
     }
 
     LaunchedEffect(vendedorId) {
-        TiendaRepository.obtenerTiendaDeVendedor(vendedorId) {
-            tienda = it
-            cargando = false
-        }
+        TiendaRepository.obtenerTiendaDeVendedor(vendedorId) { tienda = it; cargando = false }
     }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackState) },
-        containerColor = DarkBg
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .background(DarkBg)
-        ) {
+    // Carrito en tiempo real — igual que HomeScreen
+    DisposableEffect(userId) {
+        if (userId.isEmpty()) return@DisposableEffect onDispose {}
+        val ref = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            .collection("usuarios").document(userId).collection("carrito")
+        val listener = ref.addSnapshotListener { snap, _ -> carritoCount = snap?.size() ?: 0 }
+        onDispose { listener.remove() }
+    }
+
+    // Diálogo para conflicto de vendedor en carrito
+    if (mostrarDialogoConflicto && itemPendiente != null) {
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoConflicto = false; itemPendiente = null },
+            containerColor = DarkSurface,
+            title = { Text("Diferente vendedor", color = Color.White) },
+            text = {
+                Text("Tu carrito tiene items de \"$vendedorConflicto\". ¿Vaciar carrito y agregar este producto?",
+                    color = Color.Gray, fontSize = 14.sp)
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        CarritoRepository.vaciarYAgregar(userId, itemPendiente!!) {
+                            snackMsg = "Carrito actualizado"
+                        }
+                        mostrarDialogoConflicto = false; itemPendiente = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = GreenBtn)
+                ) { Text("Vaciar y agregar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarDialogoConflicto = false; itemPendiente = null }) {
+                    Text("Cancelar", color = Color.Gray)
+                }
+            }
+        )
+    }
+
+    Scaffold(snackbarHost = { SnackbarHost(snackState) }, containerColor = DarkBg) { padding ->
+        Column(modifier = Modifier.fillMaxSize().padding(padding).background(DarkBg)) {
+
             // Header
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 12.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onVolver) {
                     Icon(Icons.Default.ArrowBack, null, tint = Color.White)
                 }
-                Text(
-                    tienda?.nombreVendedor ?: "Tienda",
-                    color = Color.White,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f)
-                )
-                IconButton(onClick = onCarrito) {
-                    Icon(Icons.Default.ShoppingCart, null, tint = Color.White)
+                Text(tienda?.nombreVendedor ?: "Tienda", color = Color.White,
+                    fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                // Carrito con badge en tiempo real
+                Box {
+                    IconButton(onClick = onCarrito) {
+                        Icon(Icons.Default.ShoppingCart, null, tint = Color.White)
+                    }
+                    if (carritoCount > 0) {
+                        BadgeNumero(
+                            numero = carritoCount, color = GreenBtn,
+                            modifier = Modifier.align(Alignment.TopEnd).offset(x = (-2).dp, y = 4.dp)
+                        )
+                    }
                 }
             }
 
@@ -100,77 +132,40 @@ fun TiendaScreen(
                 return@Scaffold
             }
 
-            LazyColumn(
-                contentPadding = PaddingValues(bottom = 24.dp)
-            ) {
+            LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+
                 // Banner de la tienda
                 item {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
+                    Card(modifier = Modifier.fillMaxWidth().padding(16.dp),
                         shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = DarkSurface)
-                    ) {
+                        colors = CardDefaults.cardColors(containerColor = DarkSurface)) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                // Avatar del vendedor
-                                Box(
-                                    modifier = Modifier
-                                        .size(64.dp)
-                                        .clip(CircleShape)
-                                        .background(DarkSurface2)
-                                        .clickable { onVerPerfil(t.vendedorId) },
-                                    contentAlignment = Alignment.Center
-                                ) {
+                                Box(modifier = Modifier.size(64.dp).clip(CircleShape)
+                                    .background(DarkSurface2).clickable { onVerPerfil(t.vendedorId) },
+                                    contentAlignment = Alignment.Center) {
                                     if (t.fotoPerfil.isNotEmpty()) {
-                                        AsyncImage(
-                                            model = t.fotoPerfil,
-                                            contentDescription = null,
+                                        AsyncImage(model = t.fotoPerfil, contentDescription = null,
                                             modifier = Modifier.fillMaxSize().clip(CircleShape),
-                                            contentScale = ContentScale.Crop
-                                        )
+                                            contentScale = ContentScale.Crop)
                                     } else {
                                         Icon(Icons.Default.Store, null, tint = Color.White, modifier = Modifier.size(32.dp))
                                     }
                                 }
                                 Spacer(modifier = Modifier.width(14.dp))
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        t.nombreVendedor,
-                                        color = Color.White,
-                                        fontSize = 18.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    Text(t.nombreVendedor, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        // Rating
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text("⭐", fontSize = 13.sp)
-                                            Text(
-                                                " ${String.format("%.1f", t.ratingPromedio)}",
-                                                color = GoldStar,
-                                                fontSize = 14.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Text(
-                                                " (${t.numResenas})",
-                                                color = Color.Gray,
-                                                fontSize = 12.sp
-                                            )
+                                            Text(" ${String.format("%.1f", t.ratingPromedio)}", color = GoldStar, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                            Text(" (${t.numResenas})", color = Color.Gray, fontSize = 12.sp)
                                         }
                                         Text("·", color = Color.Gray)
-                                        Text(
-                                            "${t.numProductos} platillo${if (t.numProductos != 1) "s" else ""}",
-                                            color = Color.Gray,
-                                            fontSize = 12.sp
-                                        )
+                                        Text("${t.numProductos} platillo${if (t.numProductos != 1) "s" else ""}", color = Color.Gray, fontSize = 12.sp)
                                     }
                                 }
-                                // Botón ver perfil
                                 IconButton(onClick = { onVerPerfil(t.vendedorId) }) {
                                     Icon(Icons.Default.Person, null, tint = GreenBtn, modifier = Modifier.size(22.dp))
                                 }
@@ -180,160 +175,79 @@ fun TiendaScreen(
                             HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
                             Spacer(modifier = Modifier.height(12.dp))
 
-                            // Métricas rápidas
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceEvenly
-                            ) {
-                                MetricaTienda(
-                                    icono = "📦",
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                                MetricaTienda(icono = "📦",
                                     valor = when (t.preferenciaEntrega) {
                                         "cliente_recoge" -> "Recoger"
                                         "vendedor_lleva" -> "A domicilio"
-                                        else -> "Flexible"
-                                    },
-                                    label = "Entrega"
-                                )
+                                        else -> "Flexible" },
+                                    label = "Entrega")
                                 if (t.ubicacionDescripcion.isNotEmpty()) {
-                                    MetricaTienda(
-                                        icono = "📍",
-                                        valor = t.ubicacionDescripcion,
-                                        label = "Ubicación"
-                                    )
+                                    MetricaTienda(icono = "📍", valor = t.ubicacionDescripcion, label = "Ubicación")
                                 }
-                                MetricaTienda(
-                                    icono = "🍽️",
-                                    valor = "${t.numProductos}",
-                                    label = "Platillos"
-                                )
+                                MetricaTienda(icono = "🍽️", valor = "${t.numProductos}", label = "Platillos")
                             }
                         }
                     }
                 }
 
-                // Título sección productos
                 item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            "Menú",
-                            color = Color.White,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Text("Menú", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("más populares primero", color = Color.Gray, fontSize = 12.sp)
                     }
                 }
 
-                // Productos de la tienda
                 items(t.productos) { producto ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 5.dp),
+                    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp),
                         shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = DarkSurface)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Imagen
+                        colors = CardDefaults.cardColors(containerColor = DarkSurface)) {
+                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             if (producto.imagenUrl.isNotEmpty()) {
-                                AsyncImage(
-                                    model = producto.imagenUrl,
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .size(72.dp)
-                                        .clip(RoundedCornerShape(12.dp)),
-                                    contentScale = ContentScale.Crop
-                                )
+                                AsyncImage(model = producto.imagenUrl, contentDescription = null,
+                                    modifier = Modifier.size(72.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Crop)
                             } else {
-                                Box(
-                                    modifier = Modifier
-                                        .size(72.dp)
-                                        .background(DarkSurface2, RoundedCornerShape(12.dp)),
-                                    contentAlignment = Alignment.Center
-                                ) { Text("🍽️", fontSize = 28.sp) }
+                                Box(modifier = Modifier.size(72.dp).background(DarkSurface2, RoundedCornerShape(12.dp)),
+                                    contentAlignment = Alignment.Center) { Text("🍽️", fontSize = 28.sp) }
                             }
-
                             Spacer(modifier = Modifier.width(12.dp))
-
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    producto.nombre,
-                                    color = Color.White,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                if (producto.descripcion.isNotEmpty()) {
-                                    Text(
-                                        producto.descripcion,
-                                        color = Color.Gray,
-                                        fontSize = 12.sp,
-                                        maxLines = 2
-                                    )
-                                }
-                                if (producto.ingredientes.isNotEmpty()) {
-                                    Text(
-                                        "🥘 ${producto.ingredientes}",
-                                        color = Color.Gray,
-                                        fontSize = 11.sp,
-                                        maxLines = 1
-                                    )
-                                }
+                                Text(producto.nombre, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                                if (producto.descripcion.isNotEmpty()) Text(producto.descripcion, color = Color.Gray, fontSize = 12.sp, maxLines = 2)
+                                if (producto.ingredientes.isNotEmpty()) Text("🥘 ${producto.ingredientes}", color = Color.Gray, fontSize = 11.sp, maxLines = 1)
                                 Spacer(modifier = Modifier.height(4.dp))
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text("⭐", fontSize = 11.sp)
-                                        Text(
-                                            " ${String.format("%.1f", producto.rating)}",
-                                            color = Color.Gray,
-                                            fontSize = 11.sp
-                                        )
+                                        Text(" ${String.format("%.1f", producto.rating)}", color = Color.Gray, fontSize = 11.sp)
                                     }
-                                    Text(
-                                        "\$${String.format("%.0f", producto.precio)}",
-                                        color = GreenBtn,
-                                        fontSize = 17.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    Text("\$${String.format("%.0f", producto.precio)}", color = GreenBtn, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
-
                             Spacer(modifier = Modifier.width(10.dp))
-
-                            // Botón agregar al carrito
                             FloatingActionButton(
                                 onClick = {
                                     if (userId.isEmpty()) return@FloatingActionButton
-                                    val item = ItemCarrito(
-                                        productoId = producto.id,
-                                        nombre = producto.nombre,
-                                        precio = producto.precio,
-                                        imagenUrl = producto.imagenUrl,
-                                        vendedorId = producto.vendedorId,
-                                        nombreVendedor = producto.nombreVendedor
+                                    val nuevoItem = ItemCarrito(
+                                        productoId = producto.id, nombre = producto.nombre,
+                                        precio = producto.precio, imagenUrl = producto.imagenUrl,
+                                        vendedorId = producto.vendedorId, nombreVendedor = producto.nombreVendedor)
+                                    CarritoRepository.agregarProducto(
+                                        userId = userId,
+                                        item = nuevoItem,
+                                        onSuccess = { snackMsg = "\"${producto.nombre}\" agregado al carrito" },
+                                        onConflictoVendedor = { vendActual ->
+                                            vendedorConflicto = vendActual
+                                            itemPendiente = nuevoItem
+                                            mostrarDialogoConflicto = true
+                                        }
                                     )
-                                    CarritoRepository.agregarProducto(userId, item)
-                                    snackMsg = "\"${producto.nombre}\" agregado al carrito"
                                 },
-                                containerColor = GreenBtn,
-                                contentColor = Color.White,
-                                shape = CircleShape,
-                                modifier = Modifier.size(38.dp)
-                            ) {
-                                Icon(Icons.Default.Add, null, modifier = Modifier.size(20.dp))
-                            }
+                                containerColor = GreenBtn, contentColor = Color.White,
+                                shape = CircleShape, modifier = Modifier.size(38.dp)
+                            ) { Icon(Icons.Default.Add, null, modifier = Modifier.size(20.dp)) }
                         }
                     }
                 }

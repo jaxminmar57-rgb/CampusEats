@@ -1,5 +1,8 @@
 package com.jaz.myapplicationcampuseats.ui
 
+import android.content.Context
+import android.media.AudioAttributes
+import android.media.SoundPool
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -15,10 +18,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jaz.myapplicationcampuseats.model.Pedido
+import com.jaz.myapplicationcampuseats.repository.ChatRepository
 import com.jaz.myapplicationcampuseats.repository.PedidoRepository
 
 @Composable
@@ -27,149 +32,110 @@ fun ChatsScreen(
     onVolver: () -> Unit,
     onAbrirChat: (pedidoId: String, otroNombre: String) -> Unit
 ) {
-    // Cargamos pedidos donde el usuario es cliente O vendedor
-    var pedidosComoCliente by remember { mutableStateOf<List<Pedido>>(emptyList()) }
+    val context = LocalContext.current
+
+    var pedidosComoCliente  by remember { mutableStateOf<List<Pedido>>(emptyList()) }
     var pedidosComoVendedor by remember { mutableStateOf<List<Pedido>>(emptyList()) }
     var cargando by remember { mutableStateOf(true) }
-    var filtro by remember { mutableStateOf("activos") } // "activos" o "todos"
+    var filtro   by remember { mutableStateOf("activos") }
+
+    var mensajesNuevos by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
+    val ultimoLeido = remember { mutableStateMapOf<String, Long>() }
 
     DisposableEffect(userId) {
-        val listenerCliente = PedidoRepository.escucharPedidosCliente(userId) { lista ->
-            pedidosComoCliente = lista
-            cargando = false
-        }
-        val listenerVendedor = PedidoRepository.escucharPedidosVendedor(userId) { lista ->
-            pedidosComoVendedor = lista
-        }
-        onDispose {
-            listenerCliente.remove()
-            listenerVendedor.remove()
-        }
+        val lc = PedidoRepository.escucharPedidosCliente(userId)  { lista -> pedidosComoCliente  = lista; cargando = false }
+        val lv = PedidoRepository.escucharPedidosVendedor(userId) { lista -> pedidosComoVendedor = lista }
+        onDispose { lc.remove(); lv.remove() }
     }
 
-    // Combinar pedidos de ambos roles, sin duplicados
     val todosPedidos = remember(pedidosComoCliente, pedidosComoVendedor) {
-        (pedidosComoCliente + pedidosComoVendedor)
-            .distinctBy { it.id }
-            .sortedByDescending { it.fecha }
+        (pedidosComoCliente + pedidosComoVendedor).distinctBy { it.id }.sortedByDescending { it.fecha }
     }
 
     val pedidosFiltrados = remember(todosPedidos, filtro) {
-        if (filtro == "activos") {
-            todosPedidos.filter { it.estado !in listOf("completado", "cancelado") }
-        } else {
-            todosPedidos
-        }
+        if (filtro == "activos") todosPedidos.filter { it.estado !in listOf("completado", "cancelado") }
+        else todosPedidos
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(DarkBg)
-    ) {
-        // Header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onVolver) {
-                Icon(Icons.Default.ArrowBack, null, tint = Color.White)
-            }
-            Text(
-                "Chats",
-                color = Color.White,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(1f)
-            )
-            // Badge de chats activos
-            val activos = todosPedidos.count { it.estado !in listOf("completado", "cancelado") }
-            if (activos > 0) {
-                Box(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .background(GreenBtn),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("$activos", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
+    DisposableEffect(todosPedidos, userId) {
+        val pedidosActivos = todosPedidos.filter { it.estado !in listOf("completado", "cancelado") }
+        val listeners = pedidosActivos.map { pedido ->
+            ChatRepository.escucharMensajes(pedido.id) { mensajes ->
+                val leido    = ultimoLeido[pedido.id] ?: 0L
+                val nuevos   = mensajes.count { it.autorId != userId && it.timestamp > leido }
+                val anterior = mensajesNuevos[pedido.id] ?: 0
+                if (nuevos > anterior && anterior >= 0) reproducirSonidoMensaje(context)
+                mensajesNuevos = mensajesNuevos.toMutableMap().also { it[pedido.id] = nuevos }
             }
         }
+        onDispose { listeners.forEach { it.remove() } }
+    }
 
-        // Tabs
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
+    val totalNuevos = mensajesNuevos.values.sum()
+
+    Column(modifier = Modifier.fillMaxSize().background(DarkBg)) {
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onVolver) { Icon(Icons.Default.ArrowBack, null, tint = Color.White) }
+            Text("Chats", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            if (totalNuevos > 0) { BadgeNumero(numero = totalNuevos, color = RedCancel); Spacer(modifier = Modifier.width(8.dp)) }
+        }
+
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             listOf("activos" to "Activos", "todos" to "Todos").forEach { (key, label) ->
-                FilterChip(
-                    selected = filtro == key,
-                    onClick = { filtro = key },
-                    label = { Text(label) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = GreenBtn,
-                        selectedLabelColor = Color.White,
-                        labelColor = Color.Gray
-                    )
-                )
+                FilterChip(selected = filtro == key, onClick = { filtro = key }, label = { Text(label) },
+                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = GreenBtn,
+                        selectedLabelColor = Color.White, labelColor = Color.Gray))
             }
         }
-
         Spacer(modifier = Modifier.height(8.dp))
 
         when {
-            cargando -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = GreenBtn)
+            cargando -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = GreenBtn) }
+            pedidosFiltrados.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("💬", fontSize = 56.sp); Spacer(Modifier.height(12.dp))
+                    Text(if (filtro == "activos") "No tienes chats activos" else "No tienes chats aún",
+                        color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(6.dp))
+                    Text("Los chats aparecen cuando creas o recibes un pedido", color = Color.Gray, fontSize = 13.sp)
                 }
             }
-            pedidosFiltrados.isEmpty() -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("💬", fontSize = 56.sp)
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            if (filtro == "activos") "No tienes chats activos"
-                            else "No tienes chats aún",
-                            color = Color.White,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            "Los chats aparecen cuando creas o recibes un pedido",
-                            color = Color.Gray,
-                            fontSize = 13.sp
-                        )
-                    }
-                }
-            }
-            else -> {
-                LazyColumn(
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(pedidosFiltrados) { pedido ->
-                        val esVendedor = pedido.vendedorId == userId
-                        val otroNombre = if (esVendedor) pedido.nombreCliente else pedido.nombreVendedor
-                        val rolPropio = if (esVendedor) "Vendedor" else "Cliente"
+            else -> LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(pedidosFiltrados, key = { it.id }) { pedido ->
+                    val esVendedor = pedido.vendedorId == userId
+                    val otroNombre = if (esVendedor) pedido.nombreCliente else pedido.nombreVendedor
+                    val rolPropio  = if (esVendedor) "Vendedor" else "Cliente"
+                    val nuevos     = mensajesNuevos[pedido.id] ?: 0
 
-                        ChatResumenCard(
-                            pedido = pedido,
-                            otroNombre = otroNombre,
-                            rolPropio = rolPropio,
-                            onClick = { onAbrirChat(pedido.id, otroNombre) }
-                        )
-                    }
+                    ChatResumenCard(
+                        pedido = pedido, otroNombre = otroNombre, rolPropio = rolPropio,
+                        mensajesNuevos = nuevos,
+                        onClick = {
+                            ultimoLeido[pedido.id] = System.currentTimeMillis()
+                            mensajesNuevos = mensajesNuevos.toMutableMap().also { it[pedido.id] = 0 }
+                            onAbrirChat(pedido.id, otroNombre)
+                        }
+                    )
                 }
             }
         }
     }
+}
+
+fun reproducirSonidoMensaje(context: Context) {
+    try {
+        val sp = SoundPool.Builder().setMaxStreams(1)
+            .setAudioAttributes(AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()).build()
+        val uri = android.provider.Settings.System.DEFAULT_NOTIFICATION_URI
+        val afd = context.contentResolver.openAssetFileDescriptor(uri, "r")
+        if (afd != null) {
+            val soundId = sp.load(afd.fileDescriptor, afd.startOffset, afd.length, 1)
+            sp.setOnLoadCompleteListener { pool, sId, _ -> pool.play(sId, 1f, 1f, 1, 0, 1f); afd.close() }
+        }
+    } catch (_: Exception) {}
 }
 
 @Composable
@@ -177,99 +143,90 @@ fun ChatResumenCard(
     pedido: Pedido,
     otroNombre: String,
     rolPropio: String,
+    mensajesNuevos: Int = 0,
     onClick: () -> Unit
 ) {
-    val (estadoColor, estadoEmoji) = when (pedido.estado) {
-        "pendiente"  -> Pair(OrangeWarn, "⏳")
-        "en_espera"  -> Pair(OrangeWarn, "🕐")
-        "aceptado"   -> Pair(GreenBtn, "✅")
-        "listo"      -> Pair(GreenBtn, "🎉")
-        "completado" -> Pair(GreenLight, "🏆")
-        "cancelado"  -> Pair(RedCancel, "❌")
-        else         -> Pair(Color.Gray, "❓")
+    val info = estadoInfo(pedido.estado)
+
+    val descripcionItems = remember(pedido.items) {
+        val nombres = pedido.items.take(2).mapNotNull { it["nombre"] as? String }
+        val extra   = if (pedido.items.size > 2) " +${pedido.items.size - 2} más" else ""
+        nombres.joinToString(", ") + extra
     }
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
+        modifier = Modifier.fillMaxWidth().clickable { onClick() },
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = DarkSurface)
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        border = if (mensajesNuevos > 0)
+            androidx.compose.foundation.BorderStroke(1.dp, GreenBtn.copy(alpha = 0.5f))
+        else null
     ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Avatar con inicial
-            Box(
-                modifier = Modifier
-                    .size(46.dp)
-                    .clip(CircleShape)
-                    .background(DarkSurface2),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    otroNombre.firstOrNull()?.uppercase() ?: "?",
-                    color = Color.White,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold
-                )
+        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+
+            // Avatar con badge
+            Box(contentAlignment = Alignment.TopEnd) {
+                Box(modifier = Modifier.size(46.dp).clip(CircleShape).background(DarkSurface2),
+                    contentAlignment = Alignment.Center) {
+                    Text(otroNombre.firstOrNull()?.uppercase() ?: "?",
+                        color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                }
+                if (mensajesNuevos > 0) {
+                    Box(modifier = Modifier.size(18.dp).clip(CircleShape).background(RedCancel),
+                        contentAlignment = Alignment.Center) {
+                        Text(if (mensajesNuevos > 9) "9+" else "$mensajesNuevos",
+                            color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.width(12.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
+                Row(modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        otroNombre,
-                        color = Color.White,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(estadoEmoji, fontSize = 16.sp)
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text(otroNombre, color = Color.White, fontSize = 15.sp,
+                        fontWeight = if (mensajesNuevos > 0) FontWeight.ExtraBold else FontWeight.Bold)
+                    Text(info.emoji, fontSize = 16.sp)
                 }
                 Spacer(modifier = Modifier.height(2.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    // Rol propio
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = GreenBtn.copy(alpha = 0.2f)
-                    ) {
-                        Text(
-                            rolPropio,
-                            color = GreenBtn,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                        )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Surface(shape = RoundedCornerShape(4.dp), color = GreenBtn.copy(alpha = 0.2f)) {
+                        Text(rolPropio, color = GreenBtn, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
                     }
-                    // Estado
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = estadoColor.copy(alpha = 0.15f)
-                    ) {
-                        Text(
-                            pedido.estado.replaceFirstChar { it.uppercase() }.replace("_", " "),
-                            color = estadoColor,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                        )
+                    Surface(shape = RoundedCornerShape(4.dp), color = info.color.copy(alpha = 0.15f)) {
+                        Text(pedido.estado.replaceFirstChar { it.uppercase() }.replace("_", " "),
+                            color = info.color, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+                    }
+                    // Chip de tipo de entrega
+                    Surface(shape = RoundedCornerShape(4.dp), color = when (pedido.preferenciaEntrega) {
+                        "vendedor_lleva" -> TealListo.copy(alpha = 0.15f)
+                        "cliente_recoge" -> OrangeWarn.copy(alpha = 0.15f)
+                        else             -> GreenBtn.copy(alpha = 0.15f)
+                    }) {
+                        Text(textoEntregaCorto(pedido.preferenciaEntrega),
+                            color = when (pedido.preferenciaEntrega) {
+                                "vendedor_lleva" -> TealListo
+                                "cliente_recoge" -> OrangeWarn
+                                else             -> GreenBtn
+                            },
+                            fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
                     }
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    "Pedido · \$${String.format("%.2f", pedido.total)} · ${pedido.items.size} producto${if (pedido.items.size != 1) "s" else ""}",
-                    color = Color.Gray,
-                    fontSize = 12.sp
-                )
+                if (descripcionItems.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("🛒 $descripcionItems",
+                        color = if (mensajesNuevos > 0) Color.White.copy(alpha = 0.9f) else Color.Gray,
+                        fontSize = 12.sp, maxLines = 1,
+                        fontWeight = if (mensajesNuevos > 0) FontWeight.Medium else FontWeight.Normal)
+                }
+                Spacer(modifier = Modifier.height(2.dp))
+                Text("\$${String.format("%.2f", pedido.total)} · ${pedido.items.size} producto${if (pedido.items.size != 1) "s" else ""}",
+                    color = Color.Gray, fontSize = 11.sp)
             }
 
             Spacer(modifier = Modifier.width(8.dp))

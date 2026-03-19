@@ -1,5 +1,6 @@
 package com.jaz.myapplicationcampuseats.ui
 
+import android.content.Context
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
@@ -24,6 +25,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -34,18 +36,21 @@ import com.jaz.myapplicationcampuseats.R
 import com.jaz.myapplicationcampuseats.model.Pedido
 import com.jaz.myapplicationcampuseats.model.Producto
 import com.jaz.myapplicationcampuseats.model.Usuario
+import com.jaz.myapplicationcampuseats.repository.ChatRepository
+import com.jaz.myapplicationcampuseats.repository.NotificacionesRepository
 import com.jaz.myapplicationcampuseats.repository.PedidoRepository
 import com.jaz.myapplicationcampuseats.repository.ProductoRepository
+import com.jaz.myapplicationcampuseats.repository.UsuarioRepository
 
 val todasCategorias = listOf(
     Pair("Hamburguesas", R.drawable.hamburguesa),
-    Pair("Pizza", R.drawable.pizza),
-    Pair("Pastas", R.drawable.pastas),
-    Pair("Bebidas", R.drawable.bebidas),
-    Pair("Ensaladas", R.drawable.ensaladas),
-    Pair("Burritos", R.drawable.burritos),
-    Pair("Sandwich", R.drawable.sandwich),
-    Pair("Otros", R.drawable.otros)
+    Pair("Pizza",        R.drawable.pizza),
+    Pair("Pastas",       R.drawable.pastas),
+    Pair("Bebidas",      R.drawable.bebidas),
+    Pair("Ensaladas",    R.drawable.ensaladas),
+    Pair("Burritos",     R.drawable.burritos),
+    Pair("Sandwich",     R.drawable.sandwich),
+    Pair("Otros",        R.drawable.otros)
 )
 
 @Composable
@@ -66,42 +71,96 @@ fun HomeScreen(
     onAbrirChat: (pedidoId: String, otroNombre: String) -> Unit,
     onVerTienda: (vendedorId: String) -> Unit
 ) {
-    var busqueda by remember { mutableStateOf("") }
-    var menuAbierto by remember { mutableStateOf(false) }
+    val uid     = usuario?.uid ?: ""
+    val context = LocalContext.current
+
+    var busqueda     by remember { mutableStateOf("") }
+    var menuAbierto  by remember { mutableStateOf(false) }
     var fabExpandido by remember { mutableStateOf(false) }
-    var productos by remember { mutableStateOf<List<Producto>>(emptyList()) }
-    var pedidosActivos by remember { mutableStateOf<List<Pedido>>(emptyList()) }
-    var cargando by remember { mutableStateOf(true) }
+    var productos    by remember { mutableStateOf<List<Producto>>(emptyList()) }
+    var cargando     by remember { mutableStateOf(true) }
+    var mostrarDialogoUbicacion by remember { mutableStateOf(false) }
+    var nuevaUbicacion by remember { mutableStateOf(usuario?.ubicacionDescripcion ?: "") }
+    var guardandoUbicacion by remember { mutableStateOf(false) }
 
-    // Listener de productos en tiempo real
+    var pedidosActivosCliente  by remember { mutableStateOf<List<Pedido>>(emptyList()) }
+    var pedidosActivosVendedor by remember { mutableStateOf<List<Pedido>>(emptyList()) }
+    val pedidosActivos = remember(pedidosActivosCliente, pedidosActivosVendedor) {
+        (pedidosActivosCliente + pedidosActivosVendedor).distinctBy { it.id }
+    }
+
+    var carritoCount  by remember { mutableStateOf(0) }
+    var notifNoLeidas by remember { mutableStateOf(0) }
+
+    // Mapa pedidoId → mensajes nuevos (igual estructura que ChatsScreen para consistencia)
+    val mensajesNuevosMapa = remember { mutableStateMapOf<String, Int>() }
+    val ultimoLeido        = remember { mutableStateMapOf<String, Long>() }
+    val mensajesNuevosTotal by derivedStateOf { mensajesNuevosMapa.values.sum() }
+
+    // ── Listeners ──────────────────────────────────────────────────────────────
+
     DisposableEffect(Unit) {
-        val listener = ProductoRepository.escucharProductosDisponibles { lista ->
-            productos = lista
-            cargando = false
-        }
-        onDispose { listener.remove() }
+        val l = ProductoRepository.escucharProductosDisponibles { lista -> productos = lista; cargando = false }
+        onDispose { l.remove() }
     }
 
-    // Listener de pedidos activos del cliente
-    DisposableEffect(usuario?.uid) {
-        val uid = usuario?.uid ?: return@DisposableEffect onDispose {}
-        val listener = PedidoRepository.escucharPedidosCliente(uid) { lista ->
-            pedidosActivos = lista.filter { it.estado !in listOf("completado", "cancelado") }
+    DisposableEffect(uid) {
+        if (uid.isEmpty()) return@DisposableEffect onDispose {}
+        val lc = PedidoRepository.escucharPedidosCliente(uid) { lista ->
+            pedidosActivosCliente = lista.filter { it.estado !in listOf("completado", "cancelado") }
         }
-        onDispose { listener.remove() }
+        onDispose { lc.remove() }
     }
 
-    // Categorías con productos
+    DisposableEffect(uid) {
+        if (uid.isEmpty()) return@DisposableEffect onDispose {}
+        val lv = PedidoRepository.escucharPedidosVendedor(uid) { lista ->
+            pedidosActivosVendedor = lista.filter { it.estado !in listOf("completado", "cancelado") }
+        }
+        onDispose { lv.remove() }
+    }
+
+    // Carrito en tiempo real
+    DisposableEffect(uid) {
+        if (uid.isEmpty()) return@DisposableEffect onDispose {}
+        val ref = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            .collection("usuarios").document(uid).collection("carrito")
+        val l = ref.addSnapshotListener { snap, _ -> carritoCount = snap?.size() ?: 0 }
+        onDispose { l.remove() }
+    }
+
+    // Mensajes nuevos — snapshot individual por pedido activo
+    // Usando mapa para sumar correctamente (igual que ChatsScreen)
+    DisposableEffect(pedidosActivos, uid) {
+        val listeners = pedidosActivos.map { pedido ->
+            ChatRepository.escucharMensajes(pedido.id) { mensajes ->
+                val leido  = ultimoLeido[pedido.id] ?: 0L
+                val nuevos = mensajes.count { it.autorId != uid && it.timestamp > leido }
+                val anterior = mensajesNuevosMapa[pedido.id] ?: 0
+                if (nuevos > anterior) reproducirSonidoMensaje(context)
+                mensajesNuevosMapa[pedido.id] = nuevos
+            }
+        }
+        onDispose { listeners.forEach { it.remove() } }
+    }
+
+    // Notificaciones no leídas (sin chat)
+    DisposableEffect(uid) {
+        if (uid.isEmpty()) return@DisposableEffect onDispose {}
+        val l = NotificacionesRepository.escucharNotificaciones(uid) { lista ->
+            notifNoLeidas = lista.count { !it.leida && it.tipo != "chat" }
+        }
+        onDispose { l.remove() }
+    }
+
+    // ── Datos derivados ────────────────────────────────────────────────────────
     val categoriasConProductos = remember(productos) {
         val cats = productos.map { it.categoria }.toSet()
         todasCategorias.filter { (nombre, _) -> nombre in cats }
     }
-
-    // Productos populares (top 6 por rating * numResenas)
     val populares = remember(productos) {
         productos.sortedByDescending { it.rating * (it.numResenas + 1) }.take(6)
     }
-
     val productosFiltrados = if (busqueda.isEmpty()) productos
     else productos.filter {
         it.nombre.contains(busqueda, ignoreCase = true) ||
@@ -109,142 +168,156 @@ fun HomeScreen(
         it.nombreVendedor.contains(busqueda, ignoreCase = true)
     }
 
+    // ── Diálogo de ubicación rápida ───────────────────────────────────────────
+    if (mostrarDialogoUbicacion) {
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoUbicacion = false },
+            containerColor = DarkSurface,
+            title = { Text("📍 Actualizar mi ubicación", color = Color.White) },
+            text = {
+                Column {
+                    Text("Los clientes con pedidos de recogida verán esta ubicación.",
+                        color = Color.Gray, fontSize = 13.sp)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = nuevaUbicacion,
+                        onValueChange = { nuevaUbicacion = it },
+                        placeholder = { Text("Ej: Edificio A, planta baja, frente al gym", color = Color.Gray) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = camposColores(),
+                        maxLines = 3
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        guardandoUbicacion = true
+                        UsuarioRepository.actualizarUbicacion(uid, nuevaUbicacion.trim()) {
+                            guardandoUbicacion = false
+                            mostrarDialogoUbicacion = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = GreenBtn),
+                    enabled = !guardandoUbicacion
+                ) {
+                    if (guardandoUbicacion) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(18.dp))
+                    else Text("Guardar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarDialogoUbicacion = false }) {
+                    Text("Cancelar", color = Color.Gray)
+                }
+            }
+        )
+    }
+
+    // ── UI ─────────────────────────────────────────────────────────────────────
     Box(modifier = Modifier.fillMaxSize().background(DarkBg)) {
 
-        // ── Contenido principal ──
         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
 
             // Barra superior
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.Default.Menu,
-                    contentDescription = "Menú",
-                    tint = Color.White,
-                    modifier = Modifier.size(28.dp).clickable { menuAbierto = true }
-                )
-                Text(
-                    text = "Hola, ${usuario?.nombre ?: ""}",
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Menu, "Menú", tint = Color.White,
+                    modifier = Modifier.size(28.dp).clickable { menuAbierto = true })
+                Text("Hola, ${usuario?.nombre ?: ""}", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Badge de pedidos activos
+
+                    // Badge pedidos activos
                     if (pedidosActivos.isNotEmpty()) {
                         Box {
                             IconButton(onClick = onHistorial) {
                                 Icon(Icons.Default.Receipt, null, tint = Color.White, modifier = Modifier.size(26.dp))
                             }
-                            Box(
-                                modifier = Modifier
-                                    .size(16.dp)
-                                    .align(Alignment.TopEnd)
-                                    .offset(x = (-4).dp, y = 4.dp)
-                                    .clip(CircleShape)
-                                    .background(RedCancel),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    "${pedidosActivos.size}",
-                                    color = Color.White,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
+                            BadgeNumero(pedidosActivos.size, OrangeWarn,
+                                Modifier.align(Alignment.TopEnd).offset(x = (-2).dp, y = 4.dp))
                         }
                     }
-                    IconButton(onClick = onNotificaciones) {
-                        Icon(Icons.Default.Notifications, null, tint = Color.White, modifier = Modifier.size(26.dp))
+
+                    // Badge mensajes nuevos — tiempo real con mapa
+                    Box {
+                        IconButton(onClick = onChats) {
+                            Icon(Icons.Default.ChatBubble, null, tint = Color.White, modifier = Modifier.size(26.dp))
+                        }
+                        if (mensajesNuevosTotal > 0) {
+                            BadgeNumero(mensajesNuevosTotal, RedCancel,
+                                Modifier.align(Alignment.TopEnd).offset(x = (-2).dp, y = 4.dp))
+                        }
                     }
-                    IconButton(onClick = onCarrito) {
-                        Icon(Icons.Default.ShoppingCart, null, tint = Color.White, modifier = Modifier.size(26.dp))
+
+                    // Badge notificaciones
+                    Box {
+                        IconButton(onClick = onNotificaciones) {
+                            Icon(Icons.Default.Notifications, null, tint = Color.White, modifier = Modifier.size(26.dp))
+                        }
+                        if (notifNoLeidas > 0) {
+                            BadgeNumero(notifNoLeidas, RedCancel,
+                                Modifier.align(Alignment.TopEnd).offset(x = (-2).dp, y = 4.dp))
+                        }
+                    }
+
+                    // Carrito con badge
+                    Box {
+                        IconButton(onClick = onCarrito) {
+                            Icon(Icons.Default.ShoppingCart, null, tint = Color.White, modifier = Modifier.size(26.dp))
+                        }
+                        if (carritoCount > 0) {
+                            BadgeNumero(carritoCount, GreenBtn,
+                                Modifier.align(Alignment.TopEnd).offset(x = (-2).dp, y = 4.dp))
+                        }
                     }
                 }
             }
 
-            // Barra de búsqueda
-            OutlinedTextField(
-                value = busqueda,
-                onValueChange = { busqueda = it },
+            // Búsqueda
+            OutlinedTextField(value = busqueda, onValueChange = { busqueda = it },
                 placeholder = { Text("¿Qué se te antoja hoy?", color = Color.Gray) },
                 leadingIcon = { Icon(Icons.Default.Search, null, tint = Color.Gray) },
                 trailingIcon = {
-                    if (busqueda.isNotEmpty()) {
-                        IconButton(onClick = { busqueda = "" }) {
-                            Icon(Icons.Default.Close, null, tint = Color.Gray)
-                        }
+                    if (busqueda.isNotEmpty()) IconButton(onClick = { busqueda = "" }) {
+                        Icon(Icons.Default.Close, null, tint = Color.Gray)
                     }
                 },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
                 shape = RoundedCornerShape(24.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedContainerColor = Color.White,
-                    focusedContainerColor = Color.White,
-                    unfocusedBorderColor = Color.Transparent,
-                    focusedBorderColor = GreenBtn,
-                    unfocusedTextColor = Color(0xFF1A1A1A),
-                    focusedTextColor = Color(0xFF1A1A1A)
-                ),
-                singleLine = true
-            )
+                    unfocusedContainerColor = Color.White, focusedContainerColor = Color.White,
+                    unfocusedBorderColor = Color.Transparent, focusedBorderColor = GreenBtn,
+                    unfocusedTextColor = Color(0xFF1A1A1A), focusedTextColor = Color(0xFF1A1A1A)),
+                singleLine = true)
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // ── Pedidos activos ──
-            AnimatedVisibility(
-                visible = pedidosActivos.isNotEmpty() && busqueda.isEmpty(),
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
-            ) {
+            // Pedidos activos
+            AnimatedVisibility(visible = pedidosActivos.isNotEmpty() && busqueda.isEmpty(),
+                enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
                 Column {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Punto pulsante
+                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
                         val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-                        val pulseScale by infiniteTransition.animateFloat(
-                            initialValue = 0.8f, targetValue = 1.2f,
-                            animationSpec = infiniteRepeatable(
-                                animation = tween(800, easing = FastOutSlowInEasing),
-                                repeatMode = RepeatMode.Reverse
-                            ), label = "pulse"
-                        )
-                        Box(
-                            modifier = Modifier
-                                .size(10.dp)
-                                .scale(pulseScale)
-                                .clip(CircleShape)
-                                .background(GreenBtn)
-                        )
+                        val pulseScale by infiniteTransition.animateFloat(0.8f, 1.2f,
+                            infiniteRepeatable(tween(800, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "pulse")
+                        Box(modifier = Modifier.size(10.dp).scale(pulseScale).clip(CircleShape).background(GreenBtn))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Mis pedidos activos", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text("Pedidos activos", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.weight(1f))
-                        TextButton(onClick = onHistorial) {
-                            Text("Ver todos", color = GreenBtn, fontSize = 12.sp)
-                        }
+                        TextButton(onClick = onHistorial) { Text("Ver todos", color = GreenBtn, fontSize = 12.sp) }
                     }
                     Spacer(modifier = Modifier.height(6.dp))
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
+                    LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         items(pedidosActivos) { pedido ->
-                            PedidoActivoCard(
-                                pedido = pedido,
+                            val esDeVendedor = pedido.vendedorId == uid
+                            PedidoActivoCard(pedido = pedido, esDeVendedor = esDeVendedor,
                                 onClick = { onAbrirPedido(pedido.id) },
                                 onChat = {
-                                    onAbrirChat(pedido.id, pedido.nombreVendedor)
-                                }
-                            )
+                                    val otro = if (esDeVendedor) pedido.nombreCliente else pedido.nombreVendedor
+                                    onAbrirChat(pedido.id, otro)
+                                })
                         }
                     }
                     Spacer(modifier = Modifier.height(16.dp))
@@ -252,35 +325,18 @@ fun HomeScreen(
             }
 
             if (busqueda.isEmpty()) {
-                // ── Categorías dinámicas ──
                 if (categoriasConProductos.isNotEmpty()) {
-                    Text(
-                        "Categorías",
-                        color = Color.White,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
+                    Text("Categorías", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 16.dp))
                     Spacer(modifier = Modifier.height(10.dp))
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
+                    LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         items(categoriasConProductos) { (nombre, imagen) ->
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.clickable { onCategoria(nombre) }
-                            ) {
-                                Box(
-                                    modifier = Modifier.size(62.dp).clip(CircleShape).background(DarkSurface),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Image(
-                                        painter = painterResource(id = imagen),
-                                        contentDescription = nombre,
-                                        modifier = Modifier.size(46.dp).clip(CircleShape),
-                                        contentScale = ContentScale.Crop
-                                    )
+                            Column(horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.clickable { onCategoria(nombre) }) {
+                                Box(modifier = Modifier.size(62.dp).clip(CircleShape).background(DarkSurface),
+                                    contentAlignment = Alignment.Center) {
+                                    Image(painterResource(id = imagen), nombre,
+                                        modifier = Modifier.size(46.dp).clip(CircleShape), contentScale = ContentScale.Crop)
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(nombre, color = Color.White, fontSize = 11.sp)
@@ -289,190 +345,80 @@ fun HomeScreen(
                     }
                     Spacer(modifier = Modifier.height(20.dp))
                 }
-
-                // ── Populares ──
                 if (populares.isNotEmpty()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("🔥", fontSize = 18.sp)
-                        Spacer(modifier = Modifier.width(6.dp))
+                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("🔥", fontSize = 18.sp); Spacer(modifier = Modifier.width(6.dp))
                         Text("Populares", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     }
                     Spacer(modifier = Modifier.height(10.dp))
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(populares) { producto ->
-                            ProductoPopularCard(
-                                producto = producto,
-                                onClick = { onVerTienda(producto.vendedorId) }
-                            )
-                        }
+                    LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        items(populares) { ProductoPopularCard(producto = it, onClick = { onVerTienda(it.vendedorId) }) }
                     }
                     Spacer(modifier = Modifier.height(20.dp))
                 }
             }
 
-            // ── Todos los productos ──
-            Text(
-                text = if (busqueda.isEmpty()) "Disponibles ahora"
-                       else "Resultados para \"$busqueda\"",
-                color = Color.White,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
+            Text(if (busqueda.isEmpty()) "Disponibles ahora" else "Resultados para \"$busqueda\"",
+                color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp))
             Spacer(modifier = Modifier.height(10.dp))
 
             when {
-                cargando -> {
-                    Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = GreenBtn)
-                    }
+                cargando -> Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = GreenBtn) }
+                productosFiltrados.isEmpty() -> Column(modifier = Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("🔍", fontSize = 48.sp); Spacer(modifier = Modifier.height(12.dp))
+                    Text(if (busqueda.isEmpty()) "No hay platillos disponibles" else "Sin resultados para \"$busqueda\"",
+                        color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
-                productosFiltrados.isEmpty() -> {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text("🔍", fontSize = 48.sp)
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            if (busqueda.isEmpty()) "No hay platillos disponibles"
-                            else "Sin resultados para \"$busqueda\"",
-                            color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-                else -> {
-                    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                        productosFiltrados.chunked(2).forEach { fila ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                fila.forEach { producto ->
-                                    ProductoMiniCard(
-                                        producto = producto,
-                                        modifier = Modifier.weight(1f),
-                                        onClick = { onVerTienda(producto.vendedorId) }
-                                    )
-                                }
-                                if (fila.size == 1) Spacer(modifier = Modifier.weight(1f))
-                            }
+                else -> Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    productosFiltrados.chunked(2).forEach { fila ->
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            fila.forEach { ProductoMiniCard(producto = it, modifier = Modifier.weight(1f), onClick = { onVerTienda(it.vendedorId) }) }
+                            if (fila.size == 1) Spacer(modifier = Modifier.weight(1f))
                         }
                     }
                 }
             }
-
             Spacer(modifier = Modifier.height(100.dp))
         }
 
-        // ── Speed Dial FAB ──
+        // Speed Dial
         if (fabExpandido) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.3f))
-                    .clickable { fabExpandido = false }
-                    .zIndex(1f)
-            )
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f))
+                .clickable { fabExpandido = false }.zIndex(1f))
         }
-
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 20.dp, bottom = 24.dp)
-                .zIndex(2f),
-            horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            AnimatedVisibility(
-                visible = fabExpandido,
+        Column(modifier = Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 24.dp).zIndex(2f),
+            horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            AnimatedVisibility(visible = fabExpandido,
                 enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
-                exit = fadeOut() + slideOutVertically(targetOffsetY = { it })
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.End,
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    SpeedDialOpcion(Icons.Default.Notifications, "Notificaciones") {
-                        fabExpandido = false; onNotificaciones()
-                    }
-                    SpeedDialOpcion(Icons.Default.Receipt, "Mis pedidos") {
-                        fabExpandido = false; onHistorial()
-                    }
-                    SpeedDialOpcion(Icons.Default.ChatBubble, "Mensajes") {
-                        fabExpandido = false; onChats()
-                    }
-                    SpeedDialOpcion(Icons.Default.ShoppingCart, "Ver carrito") {
-                        fabExpandido = false; onCarrito()
-                    }
-                    SpeedDialOpcion(Icons.Default.AddBox, "Publicar platillo") {
-                        fabExpandido = false; onPublicar()
-                    }
+                exit = fadeOut() + slideOutVertically(targetOffsetY = { it })) {
+                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SpeedDialOpcion(Icons.Default.Notifications, "Notificaciones") { fabExpandido = false; onNotificaciones() }
+                    SpeedDialOpcion(Icons.Default.Receipt, "Mis pedidos") { fabExpandido = false; onHistorial() }
+                    SpeedDialOpcion(Icons.Default.ChatBubble, "Mensajes") { fabExpandido = false; onChats() }
+                    SpeedDialOpcion(Icons.Default.ShoppingCart, "Ver carrito") { fabExpandido = false; onCarrito() }
+                    SpeedDialOpcion(Icons.Default.AddBox, "Publicar platillo") { fabExpandido = false; onPublicar() }
                 }
             }
-
-            FloatingActionButton(
-                onClick = { fabExpandido = !fabExpandido },
-                containerColor = GreenBtn,
-                contentColor = Color.White,
-                shape = CircleShape,
-                modifier = Modifier.size(60.dp)
-            ) {
-                Icon(
-                    if (fabExpandido) Icons.Default.Close else Icons.Default.Add,
-                    contentDescription = "Acciones",
-                    modifier = Modifier.size(28.dp)
-                )
+            FloatingActionButton(onClick = { fabExpandido = !fabExpandido }, containerColor = GreenBtn,
+                contentColor = Color.White, shape = CircleShape, modifier = Modifier.size(60.dp)) {
+                Icon(if (fabExpandido) Icons.Default.Close else Icons.Default.Add, "Acciones", modifier = Modifier.size(28.dp))
             }
         }
 
-        // ── Menú lateral ──
+        // Menú lateral
         if (menuAbierto) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.55f))
-                    .clickable { menuAbierto = false }
-                    .zIndex(10f)
-            )
-            Column(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .width(275.dp)
-                    .align(Alignment.CenterStart)
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(Color(0xFF1A3320), Color(0xFF0D1F17))
-                        )
-                    )
-                    .padding(horizontal = 20.dp, vertical = 24.dp)
-                    .zIndex(11f)
-                    .clickable(enabled = false) {}
-            ) {
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f))
+                .clickable { menuAbierto = false }.zIndex(10f))
+            Column(modifier = Modifier.fillMaxHeight().width(275.dp).align(Alignment.CenterStart)
+                .background(Brush.verticalGradient(listOf(Color(0xFF1A3320), Color(0xFF0D1F17))))
+                .padding(horizontal = 20.dp, vertical = 24.dp).zIndex(11f).clickable(enabled = false) {}) {
                 Spacer(modifier = Modifier.height(32.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(52.dp)
-                            .clip(CircleShape)
-                            .background(DarkSurface),
-                        contentAlignment = Alignment.Center
-                    ) {
+                    Box(modifier = Modifier.size(52.dp).clip(CircleShape).background(DarkSurface),
+                        contentAlignment = Alignment.Center) {
                         if (usuario?.fotoPerfil?.isNotEmpty() == true) {
-                            AsyncImage(
-                                model = usuario.fotoPerfil,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize().clip(CircleShape),
-                                contentScale = ContentScale.Crop
-                            )
+                            AsyncImage(model = usuario.fotoPerfil, contentDescription = null,
+                                modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
                         } else {
                             Icon(Icons.Default.Person, null, tint = Color.White, modifier = Modifier.size(28.dp))
                         }
@@ -501,6 +447,14 @@ fun HomeScreen(
                 MenuOpcion(Icons.Default.Add, "Publicar platillo") { menuAbierto = false; onPublicar() }
                 MenuOpcion(Icons.Default.List, "Pedidos recibidos") { menuAbierto = false; onPedidosVendedor() }
                 MenuOpcion(Icons.Default.RestaurantMenu, "Mis publicaciones") { menuAbierto = false; onMisPublicaciones() }
+                // Actualizar ubicación rápido (solo si su preferencia es cliente_recoge o ambos)
+                if (usuario?.preferenciaEntrega != "vendedor_lleva") {
+                    MenuOpcion(Icons.Default.LocationOn, "Actualizar mi ubicación", tint = OrangeWarn) {
+                        menuAbierto = false
+                        nuevaUbicacion = usuario?.ubicacionDescripcion ?: ""
+                        mostrarDialogoUbicacion = true
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(12.dp))
                 HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
@@ -522,146 +476,83 @@ fun HomeScreen(
     }
 }
 
-// ── Tarjeta de pedido activo en HomeScreen ──
-@Composable
-fun PedidoActivoCard(
-    pedido: Pedido,
-    onClick: () -> Unit,
-    onChat: () -> Unit
-) {
-    val estadoInfo = estadoInfo(pedido.estado)
-    val tiempoTexto = tiempoTranscurrido(pedido.fecha)
+// ── Composables reutilizables ─────────────────────────────────────────────────
 
-    Card(
-        modifier = Modifier
-            .width(220.dp)
-            .clickable { onClick() },
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = estadoInfo.color.copy(alpha = 0.12f)
-        ),
-        border = CardDefaults.outlinedCardBorder().copy(
-            brush = androidx.compose.ui.graphics.SolidColor(estadoInfo.color.copy(alpha = 0.4f))
-        )
+@Composable
+fun BadgeNumero(numero: Int, color: Color, modifier: Modifier = Modifier) {
+    Box(modifier = modifier.defaultMinSize(minWidth = 16.dp, minHeight = 16.dp)
+        .clip(CircleShape).background(color).padding(horizontal = 3.dp),
+        contentAlignment = Alignment.Center) {
+        Text(if (numero > 99) "99+" else "$numero", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+fun PedidoActivoCard(pedido: Pedido, esDeVendedor: Boolean, onClick: () -> Unit, onChat: () -> Unit) {
+    val info = estadoInfo(pedido.estado)
+    val esListo = pedido.estado == "listo"
+    val infiniteTransition = rememberInfiniteTransition(label = "listoHome")
+    val borderAlpha by infiniteTransition.animateFloat(0.3f, 1f,
+        infiniteRepeatable(tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "borderAlpha")
+
+    Card(modifier = Modifier.width(220.dp).clickable { onClick() }, shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = info.color.copy(alpha = 0.12f)),
+        border = if (esListo)
+            androidx.compose.foundation.BorderStroke(2.dp, info.color.copy(alpha = borderAlpha))
+        else
+            androidx.compose.foundation.BorderStroke(1.dp, info.color.copy(alpha = 0.4f))
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            // Estado con color
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(estadoInfo.color)
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+            Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                .background(info.color).padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(estadoInfo.emoji, fontSize = 14.sp)
+                    Text(info.emoji, fontSize = 14.sp)
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        estadoInfo.label,
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text(info.label, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
-                Text(tiempoTexto, color = Color.White.copy(alpha = 0.8f), fontSize = 10.sp)
+                Text(tiempoTranscurrido(pedido.fecha), color = Color.White.copy(alpha = 0.8f), fontSize = 10.sp)
             }
-
             Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                "🏪 ${pedido.nombreVendedor}",
-                color = Color.White,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                "${pedido.items.size} producto${if (pedido.items.size != 1) "s" else ""} · \$${String.format("%.0f", pedido.total)}",
-                color = Color.Gray,
-                fontSize = 12.sp
-            )
-
-            // Primera item del pedido
-            val primerItem = pedido.items.firstOrNull()
-            val nombreItem = primerItem?.get("nombre") as? String ?: ""
-            if (nombreItem.isNotEmpty()) {
-                Text(nombreItem, color = Color.Gray, fontSize = 11.sp, maxLines = 1)
+            Surface(shape = RoundedCornerShape(4.dp),
+                color = if (esDeVendedor) OrangeWarn.copy(alpha = 0.2f) else GreenBtn.copy(alpha = 0.2f)) {
+                Text(if (esDeVendedor) "📦 Como vendedor" else "🛒 Como cliente",
+                    color = if (esDeVendedor) OrangeWarn else GreenBtn,
+                    fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
             }
-
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(if (esDeVendedor) "👤 ${pedido.nombreCliente}" else "🏪 ${pedido.nombreVendedor}",
+                color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text("${pedido.items.size} producto${if (pedido.items.size != 1) "s" else ""} · \$${String.format("%.0f", pedido.total)}",
+                color = Color.Gray, fontSize = 12.sp)
+            Text(textoEntregaCorto(pedido.preferenciaEntrega), color = Color.Gray, fontSize = 10.sp)
             Spacer(modifier = Modifier.height(8.dp))
-
-            // Botón chat
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                IconButton(
-                    onClick = onChat,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(estadoInfo.color.copy(alpha = 0.3f))
-                ) {
-                    Icon(
-                        Icons.Default.ChatBubble,
-                        null,
-                        tint = estadoInfo.color,
-                        modifier = Modifier.size(16.dp)
-                    )
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                IconButton(onClick = onChat,
+                    modifier = Modifier.size(32.dp).clip(CircleShape).background(info.color.copy(alpha = 0.3f))) {
+                    Icon(Icons.Default.ChatBubble, null, tint = info.color, modifier = Modifier.size(16.dp))
                 }
             }
         }
     }
 }
 
-// ── Tarjeta de producto popular (horizontal) ──
 @Composable
 fun ProductoPopularCard(producto: Producto, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .width(160.dp)
-            .clickable { onClick() },
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = DarkSurface)
-    ) {
+    Card(modifier = Modifier.width(160.dp).clickable { onClick() }, shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface)) {
         Column {
             Box {
                 if (producto.imagenUrl.isNotEmpty()) {
-                    AsyncImage(
-                        model = producto.imagenUrl,
-                        contentDescription = producto.nombre,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(100.dp)
-                            .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
-                        contentScale = ContentScale.Crop
-                    )
+                    AsyncImage(model = producto.imagenUrl, contentDescription = producto.nombre,
+                        modifier = Modifier.fillMaxWidth().height(100.dp).clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)), contentScale = ContentScale.Crop)
                 } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(100.dp)
-                            .background(DarkSurface2, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
-                        contentAlignment = Alignment.Center
-                    ) { Text("🍽️", fontSize = 32.sp) }
+                    Box(modifier = Modifier.fillMaxWidth().height(100.dp).background(DarkSurface2, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
+                        contentAlignment = Alignment.Center) { Text("🍽️", fontSize = 32.sp) }
                 }
-                // Badge rating
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(6.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color.Black.copy(alpha = 0.7f)
-                ) {
-                    Text(
-                        "⭐ ${String.format("%.1f", producto.rating)}",
-                        color = Color.White,
-                        fontSize = 10.sp,
-                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                    )
+                Surface(modifier = Modifier.align(Alignment.TopEnd).padding(6.dp), shape = RoundedCornerShape(8.dp), color = Color.Black.copy(alpha = 0.7f)) {
+                    Text("⭐ ${String.format("%.1f", producto.rating)}", color = Color.White, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
                 }
             }
             Column(modifier = Modifier.padding(10.dp)) {
@@ -673,60 +564,17 @@ fun ProductoPopularCard(producto: Producto, onClick: () -> Unit) {
     }
 }
 
-// ── Helpers ──
-
-data class EstadoInfo(val color: Color, val emoji: String, val label: String)
-
-fun estadoInfo(estado: String): EstadoInfo = when (estado) {
-    "pendiente"  -> EstadoInfo(OrangeWarn, "⏳", "Pendiente")
-    "en_espera"  -> EstadoInfo(OrangeWarn, "🕐", "En espera")
-    "aceptado"   -> EstadoInfo(GreenBtn,   "✅", "Aceptado")
-    "listo"      -> EstadoInfo(GreenBtn,   "🎉", "¡Listo!")
-    "completado" -> EstadoInfo(GreenLight, "🏆", "Completado")
-    "cancelado"  -> EstadoInfo(RedCancel,  "❌", "Cancelado")
-    else         -> EstadoInfo(Color.Gray, "❓", estado)
-}
-
-fun tiempoTranscurrido(timestamp: Long): String {
-    val diff = System.currentTimeMillis() - timestamp
-    val minutos = diff / 60_000
-    return when {
-        minutos < 1  -> "ahora"
-        minutos < 60 -> "${minutos}min"
-        else         -> "${minutos / 60}h ${minutos % 60}min"
-    }
-}
-
 @Composable
-fun ProductoMiniCard(
-    producto: Producto,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = modifier.padding(vertical = 6.dp).clickable { onClick() },
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = DarkSurface)
-    ) {
+fun ProductoMiniCard(producto: Producto, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Card(modifier = modifier.padding(vertical = 6.dp).clickable { onClick() }, shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface)) {
         Column {
             if (producto.imagenUrl.isNotEmpty()) {
-                AsyncImage(
-                    model = producto.imagenUrl,
-                    contentDescription = producto.nombre,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(100.dp)
-                        .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
-                    contentScale = ContentScale.Crop
-                )
+                AsyncImage(model = producto.imagenUrl, contentDescription = producto.nombre,
+                    modifier = Modifier.fillMaxWidth().height(100.dp).clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)), contentScale = ContentScale.Crop)
             } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(100.dp)
-                        .background(DarkSurface2, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
-                    contentAlignment = Alignment.Center
-                ) { Text("🍽️", fontSize = 36.sp) }
+                Box(modifier = Modifier.fillMaxWidth().height(100.dp).background(DarkSurface2, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
+                    contentAlignment = Alignment.Center) { Text("🍽️", fontSize = 36.sp) }
             }
             Column(modifier = Modifier.padding(10.dp)) {
                 Text(producto.nombre, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -737,6 +585,11 @@ fun ProductoMiniCard(
                     Text(" ${String.format("%.1f", producto.rating)}", color = Color.Gray, fontSize = 11.sp)
                 }
                 Text("\$${String.format("%.0f", producto.precio)}", color = GreenBtn, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                if (producto.mostrarCantidad && producto.cantidadDisponible >= 0) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(if (producto.cantidadDisponible == 0) "Sin stock" else "${producto.cantidadDisponible} disponibles",
+                        color = if (producto.cantidadDisponible == 0) RedCancel else OrangeWarn, fontSize = 10.sp)
+                }
             }
         }
     }
@@ -744,52 +597,21 @@ fun ProductoMiniCard(
 
 @Composable
 fun SpeedDialOpcion(icono: ImageVector, etiqueta: String, onClick: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.End,
-        modifier = Modifier.clickable { onClick() }
-    ) {
-        Surface(
-            shape = RoundedCornerShape(8.dp),
-            color = Color(0xFF1A3320),
-            shadowElevation = 4.dp
-        ) {
-            Text(
-                etiqueta,
-                color = Color.White,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-            )
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End, modifier = Modifier.clickable { onClick() }) {
+        Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFF1A3320), shadowElevation = 4.dp) {
+            Text(etiqueta, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
         }
         Spacer(modifier = Modifier.width(8.dp))
-        FloatingActionButton(
-            onClick = onClick,
-            containerColor = DarkCard,
-            contentColor = GreenBtn,
-            shape = CircleShape,
-            modifier = Modifier.size(44.dp)
-        ) {
-            Icon(icono, contentDescription = etiqueta, modifier = Modifier.size(22.dp))
+        FloatingActionButton(onClick = onClick, containerColor = DarkCard, contentColor = GreenBtn, shape = CircleShape, modifier = Modifier.size(44.dp)) {
+            Icon(icono, etiqueta, modifier = Modifier.size(22.dp))
         }
     }
 }
 
 @Composable
-fun MenuOpcion(
-    icono: ImageVector,
-    texto: String,
-    tint: Color = Color.White,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(vertical = 11.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(icono, contentDescription = texto, tint = tint, modifier = Modifier.size(21.dp))
+fun MenuOpcion(icono: ImageVector, texto: String, tint: Color = Color.White, onClick: () -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icono, texto, tint = tint, modifier = Modifier.size(21.dp))
         Spacer(modifier = Modifier.width(14.dp))
         Text(texto, color = tint, fontSize = 15.sp)
     }

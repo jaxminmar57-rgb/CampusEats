@@ -60,18 +60,20 @@ dependencies {
     // Navigation Compose
     implementation("androidx.navigation:navigation-compose:2.8.4")
 
+    // ViewModel para Compose (nuevo)
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+
     // Coil para imágenes
     implementation("io.coil-kt:coil-compose:2.7.0")
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
-    // Firebase BoM — versión única controla todo
+    // Firebase BoM
     implementation(platform("com.google.firebase:firebase-bom:33.6.0"))
     implementation("com.google.firebase:firebase-firestore-ktx")
     implementation("com.google.firebase:firebase-auth-ktx")
     implementation("com.google.firebase:firebase-storage-ktx")
-
     implementation("com.google.firebase:firebase-messaging-ktx")
 
     // Tests

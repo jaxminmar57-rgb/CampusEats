@@ -4,9 +4,6 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.messaging.FirebaseMessaging
 import com.jaz.myapplicationcampuseats.model.NotificacionApp
-import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 
 object FcmRepository {
 
@@ -31,14 +28,16 @@ object FcmRepository {
         }
     }
 
-    // ─── Envío ───────────────────────────────────────────────────────────────
-
-    /**
-     * Reemplaza TU_SERVER_KEY_AQUI con tu clave de servidor de Firebase:
-     * Firebase Console → Configuración del proyecto → Cloud Messaging → Clave del servidor
-     */
-    private const val SERVER_KEY = "BMBPQ9_amy98QRxjQHnXhkKkzY2BSzY4GoP19dJdC-9uYSQr7Xh3ej_K-h4YBfyGT253eY4PyPfOTTPejaNymN8"
-    private const val FCM_URL    = "https://fcm.googleapis.com/fcm/send"
+    // ─── Envío de notificaciones ─────────────────────────────────────────────
+    //
+    // IMPORTANTE: El envío de push (FCM) debe hacerse desde un backend seguro
+    // (Cloud Functions, tu propio servidor, etc.) usando la API FCM v1.
+    //
+    // Desde la app solo guardamos la notificación in-app en Firestore y
+    // opcionalmente escribimos en una colección "pendingNotifications" para
+    // que una Cloud Function la procese y envíe el push real.
+    //
+    // NUNCA pongas SERVER_KEY ni credenciales de servicio en el código cliente.
 
     fun enviarNotificacion(
         destinatarioUid: String,
@@ -48,7 +47,7 @@ object FcmRepository {
         pedidoId: String = "",
         otroNombre: String = ""
     ) {
-        // 1. Guardar la notificación en Firestore (in-app)
+        // 1. Guardar notificación in-app (siempre funciona)
         NotificacionesRepository.guardarNotificacion(
             NotificacionApp(
                 uid        = destinatarioUid,
@@ -60,51 +59,18 @@ object FcmRepository {
             )
         )
 
-        // 2. Enviar push FCM
-        db.collection("usuarios").document(destinatarioUid).get()
-            .addOnSuccessListener { doc ->
-                val token = doc.getString("fcmToken") ?: return@addOnSuccessListener
-                Thread { enviarFcm(token, titulo, cuerpo, tipo, pedidoId, otroNombre) }.start()
-            }
-    }
-
-    private fun enviarFcm(
-        token: String, titulo: String, cuerpo: String,
-        tipo: String, pedidoId: String, otroNombre: String
-    ) {
-        if (SERVER_KEY == "TU_SERVER_KEY_AQUI") return
-
-        try {
-            val url  = URL(FCM_URL)
-            val conn = url.openConnection() as HttpURLConnection
-            conn.requestMethod = "POST"
-            conn.setRequestProperty("Authorization", "key=$SERVER_KEY")
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.doOutput = true
-
-            val payload = JSONObject().apply {
-                put("to", token)
-                put("notification", JSONObject().apply {
-                    put("title", titulo)
-                    put("body", cuerpo)
-                    put("sound", "default")
-                })
-                put("data", JSONObject().apply {
-                    put("tipo", tipo)
-                    put("pedidoId", pedidoId)
-                    put("otroNombre", otroNombre)
-                    put("titulo", titulo)
-                    put("cuerpo", cuerpo)
-                })
-                put("priority", "high")
-            }
-
-            conn.outputStream.write(payload.toString().toByteArray())
-            conn.responseCode
-            conn.disconnect()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        // 2. Escribir en cola para que Cloud Function envíe el push
+        val pushData = hashMapOf(
+            "destinatarioUid" to destinatarioUid,
+            "titulo"          to titulo,
+            "cuerpo"          to cuerpo,
+            "tipo"            to tipo,
+            "pedidoId"        to pedidoId,
+            "otroNombre"      to otroNombre,
+            "timestamp"       to System.currentTimeMillis(),
+            "enviado"         to false
+        )
+        db.collection("pendingNotifications").add(pushData)
     }
 
     // ─── Helpers por evento ──────────────────────────────────────────────────
@@ -112,7 +78,7 @@ object FcmRepository {
     fun notificarNuevoPedido(vendedorUid: String, clienteNombre: String, pedidoId: String, total: Double) {
         enviarNotificacion(
             destinatarioUid = vendedorUid,
-            titulo     = "🛒 Nuevo pedido",
+            titulo     = "Nuevo pedido",
             cuerpo     = "$clienteNombre realizó un pedido de \$${String.format("%.0f", total)}",
             tipo       = "pedido",
             pedidoId   = pedidoId,
@@ -121,17 +87,17 @@ object FcmRepository {
     }
 
     fun notificarCambioEstado(clienteUid: String, vendedorNombre: String, pedidoId: String, nuevoEstado: String) {
-        val (emoji, texto) = when (nuevoEstado) {
-            "aceptado"   -> "✅" to "Tu pedido fue aceptado"
-            "en_espera"  -> "🕐" to "Tu pedido está en espera"
-            "listo"      -> "🎉" to "¡Tu pedido está listo!"
-            "cancelado"  -> "❌" to "Tu pedido fue cancelado"
-            "completado" -> "🏆" to "Pedido completado"
-            else         -> "📦" to "Tu pedido se actualizó"
+        val texto = when (nuevoEstado) {
+            "aceptado"   -> "Tu pedido fue aceptado"
+            "en_espera"  -> "Tu pedido está en espera"
+            "listo"      -> "¡Tu pedido está listo!"
+            "cancelado"  -> "Tu pedido fue cancelado"
+            "completado" -> "Pedido completado"
+            else         -> "Tu pedido se actualizó"
         }
         enviarNotificacion(
             destinatarioUid = clienteUid,
-            titulo     = "$emoji $texto",
+            titulo     = texto,
             cuerpo     = "De: $vendedorNombre",
             tipo       = "pedido",
             pedidoId   = pedidoId,
@@ -142,7 +108,7 @@ object FcmRepository {
     fun notificarMensajeChat(destinatarioUid: String, remitenteNombre: String, pedidoId: String, mensaje: String) {
         enviarNotificacion(
             destinatarioUid = destinatarioUid,
-            titulo     = "💬 Mensaje de $remitenteNombre",
+            titulo     = "Mensaje de $remitenteNombre",
             cuerpo     = mensaje,
             tipo       = "chat",
             pedidoId   = pedidoId,

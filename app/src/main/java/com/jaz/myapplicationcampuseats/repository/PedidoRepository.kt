@@ -11,146 +11,76 @@ object PedidoRepository {
     private val pedidosRef = db.collection("pedidos")
 
     fun crearPedido(
-        clienteId: String,
-        nombreCliente: String,
-        items: List<ItemCarrito>,
-        metodoPago: String,
-        notas: String,
-        preferenciaEntrega: String,
-        onSuccess: (String) -> Unit,
-        onError: (String) -> Unit
+        clienteId: String, nombreCliente: String, items: List<ItemCarrito>,
+        metodoPago: String, notas: String, preferenciaEntrega: String,
+        onSuccess: (String) -> Unit, onError: (String) -> Unit
     ) {
         if (items.isEmpty()) { onError("El carrito está vacío"); return }
-
-        val vendedorId    = items.first().vendedorId
+        val vendedorId = items.first().vendedorId
         val nombreVendedor = items.first().nombreVendedor
-        val total         = items.sumOf { it.precio * it.cantidad }
-
+        val total = items.sumOf { it.precio * it.cantidad }
         val doc = pedidosRef.document()
-
-        val itemsMapa = items.map { item ->
-            mapOf(
-                "productoId" to item.productoId,
-                "nombre"     to item.nombre,
-                "precio"     to item.precio,
-                "cantidad"   to item.cantidad,
-                "imagenUrl"  to item.imagenUrl
-            )
-        }
-
-        val pedido = Pedido(
-            id = doc.id,
-            clienteId = clienteId,
-            vendedorId = vendedorId,
-            nombreCliente = nombreCliente,
-            nombreVendedor = nombreVendedor,
-            items = itemsMapa,
-            estado = "pendiente",
-            total = total,
-            metodoPago = metodoPago,
-            preferenciaEntrega = preferenciaEntrega,
-            notas = notas
-        )
-
-        doc.set(pedido)
-            .addOnSuccessListener {
-                // Notificar al vendedor del nuevo pedido
-                FcmRepository.notificarNuevoPedido(
-                    vendedorUid  = vendedorId,
-                    clienteNombre = nombreCliente,
-                    pedidoId     = doc.id,
-                    total        = total
-                )
-                onSuccess(doc.id)
-            }
-            .addOnFailureListener { onError(it.message ?: "Error al crear pedido") }
+        val itemsMapa = items.map { mapOf("productoId" to it.productoId, "nombre" to it.nombre, "precio" to it.precio, "cantidad" to it.cantidad, "imagenUrl" to it.imagenUrl) }
+        val pedido = Pedido(id = doc.id, clienteId = clienteId, vendedorId = vendedorId, nombreCliente = nombreCliente, nombreVendedor = nombreVendedor, items = itemsMapa, estado = "pendiente", total = total, metodoPago = metodoPago, preferenciaEntrega = preferenciaEntrega, notas = notas)
+        doc.set(pedido).addOnSuccessListener {
+            FcmRepository.notificarNuevoPedido(vendedorId, nombreCliente, doc.id, total)
+            onSuccess(doc.id)
+        }.addOnFailureListener { onError(it.message ?: "Error") }
     }
 
     fun escucharPedidosCliente(clienteId: String, onUpdate: (List<Pedido>) -> Unit): ListenerRegistration {
-        return pedidosRef
-            .whereEqualTo("clienteId", clienteId)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null || snapshot == null) { onUpdate(emptyList()); return@addSnapshotListener }
-                val lista = snapshot.documents
-                    .mapNotNull { it.toObject(Pedido::class.java) }
-                    .sortedByDescending { it.fecha }
-                onUpdate(lista)
-            }
+        return pedidosRef.whereEqualTo("clienteId", clienteId).addSnapshotListener { snapshot, _ ->
+            onUpdate(snapshot?.documents?.mapNotNull { it.toObject(Pedido::class.java) }?.sortedByDescending { it.fecha } ?: emptyList())
+        }
     }
 
     fun escucharPedidosVendedor(vendedorId: String, onUpdate: (List<Pedido>) -> Unit): ListenerRegistration {
-        return pedidosRef
-            .whereEqualTo("vendedorId", vendedorId)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null || snapshot == null) { onUpdate(emptyList()); return@addSnapshotListener }
-                val lista = snapshot.documents
-                    .mapNotNull { it.toObject(Pedido::class.java) }
-                    .sortedByDescending { it.fecha }
-                onUpdate(lista)
-            }
+        return pedidosRef.whereEqualTo("vendedorId", vendedorId).addSnapshotListener { snapshot, _ ->
+            onUpdate(snapshot?.documents?.mapNotNull { it.toObject(Pedido::class.java) }?.sortedByDescending { it.fecha } ?: emptyList())
+        }
     }
 
     fun escucharPedido(pedidoId: String, onUpdate: (Pedido?) -> Unit): ListenerRegistration {
-        return pedidosRef.document(pedidoId)
-            .addSnapshotListener { snapshot, _ ->
-                onUpdate(snapshot?.toObject(Pedido::class.java))
-            }
+        return pedidosRef.document(pedidoId).addSnapshotListener { snapshot, _ ->
+            onUpdate(snapshot?.toObject(Pedido::class.java))
+        }
     }
 
-    fun cambiarEstado(
-        pedidoId: String,
-        nuevoEstado: String,
-        onSuccess: () -> Unit = {},
-        onError: (String) -> Unit = {}
-    ) {
-        pedidosRef.document(pedidoId)
-            .update("estado", nuevoEstado)
-            .addOnSuccessListener {
-                // Notificar al cliente del cambio de estado
-                pedidosRef.document(pedidoId).get().addOnSuccessListener { doc ->
-                    val pedido = doc.toObject(Pedido::class.java) ?: return@addOnSuccessListener
-                    FcmRepository.notificarCambioEstado(
-                        clienteUid    = pedido.clienteId,
-                        vendedorNombre = pedido.nombreVendedor,
-                        pedidoId      = pedidoId,
-                        nuevoEstado   = nuevoEstado
-                    )
-                }
-                onSuccess()
+    fun cambiarEstado(pedidoId: String, nuevoEstado: String, onSuccess: () -> Unit = {}, onError: (String) -> Unit = {}) {
+        pedidosRef.document(pedidoId).update("estado", nuevoEstado).addOnSuccessListener {
+            pedidosRef.document(pedidoId).get().addOnSuccessListener { doc ->
+                val p = doc.toObject(Pedido::class.java) ?: return@addOnSuccessListener
+                FcmRepository.notificarCambioEstado(p.clienteId, p.nombreVendedor, pedidoId, nuevoEstado)
             }
-            .addOnFailureListener { onError(it.message ?: "Error") }
+            onSuccess()
+        }.addOnFailureListener { onError(it.message ?: "Error") }
     }
 
     fun clienteConfirmaEntrega(pedidoId: String, onSuccess: () -> Unit = {}) {
-        pedidosRef.document(pedidoId).update("clienteConfirmoEntrega", true)
-            .addOnSuccessListener {
-                pedidosRef.document(pedidoId).get().addOnSuccessListener { doc ->
-                    val vendedorConfirmo = doc.getBoolean("vendedorConfirmoEntrega") ?: false
-                    if (vendedorConfirmo) cambiarEstado(pedidoId, "completado")
-                }
-                onSuccess()
+        pedidosRef.document(pedidoId).update("clienteConfirmoEntrega", true).addOnSuccessListener {
+            pedidosRef.document(pedidoId).get().addOnSuccessListener { doc ->
+                if (doc.getBoolean("vendedorConfirmoEntrega") == true) cambiarEstado(pedidoId, "completado")
             }
+            onSuccess()
+        }
     }
 
     fun vendedorConfirmaEntrega(pedidoId: String, onSuccess: () -> Unit = {}) {
-        pedidosRef.document(pedidoId).update("vendedorConfirmoEntrega", true)
-            .addOnSuccessListener {
-                pedidosRef.document(pedidoId).get().addOnSuccessListener { doc ->
-                    val clienteConfirmo = doc.getBoolean("clienteConfirmoEntrega") ?: false
-                    if (clienteConfirmo) cambiarEstado(pedidoId, "completado")
+        pedidosRef.document(pedidoId).update("vendedorConfirmoEntrega", true).addOnSuccessListener {
+            pedidosRef.document(pedidoId).get().addOnSuccessListener { doc ->
+                if (doc.getBoolean("clienteConfirmoEntrega") == true) {
+                    cambiarEstado(pedidoId, "completado")
+                    val items = (doc.get("items") as? List<Map<String, Any>>) ?: emptyList()
+                    ProductoRepository.descontarStockPorPedido(items)
                 }
-                onSuccess()
             }
+            onSuccess()
+        }
     }
 
     fun obtenerPedidosUsuario(userId: String, onResult: (List<Pedido>) -> Unit) {
         pedidosRef.whereEqualTo("clienteId", userId).get()
-            .addOnSuccessListener { result ->
-                val lista = result.documents
-                    .mapNotNull { it.toObject(Pedido::class.java) }
-                    .sortedByDescending { it.fecha }
-                onResult(lista)
-            }
+            .addOnSuccessListener { onResult(it.documents.mapNotNull { d -> d.toObject(Pedido::class.java) }.sortedByDescending { p -> p.fecha }) }
             .addOnFailureListener { onResult(emptyList()) }
     }
 }

@@ -1,64 +1,69 @@
 package com.jaz.myapplicationcampuseats
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.*
 import androidx.core.content.ContextCompat
 import com.jaz.myapplicationcampuseats.navigation.AppNavigation
 import com.jaz.myapplicationcampuseats.repository.FcmRepository
 import com.jaz.myapplicationcampuseats.repository.UsuarioRepository
 import com.jaz.myapplicationcampuseats.service.NotificationHelper
+import com.jaz.myapplicationcampuseats.ui.theme.CampusEatsTheme
 
 class MainActivity : ComponentActivity() {
 
-    // Parámetros de deep link desde notificación
-    var deepLinkDestino: String? = null
-    var deepLinkPedidoId: String? = null
-    var deepLinkOtroNombre: String? = null
+    // Deep link state — observable para Compose
+    var deepLinkDestino = mutableStateOf<String?>(null)
+    var deepLinkPedidoId = mutableStateOf<String?>(null)
+    var deepLinkOtroNombre = mutableStateOf<String?>(null)
 
-    // Launcher para pedir permiso de notificaciones en Android 13+
     private val permisosLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { concedido ->
-        if (concedido) {
-            // Permiso concedido — registrar token FCM
-            if (UsuarioRepository.hayUsuarioLogueado()) {
-                FcmRepository.registrarTokenActual()
-            }
+        if (concedido && UsuarioRepository.hayUsuarioLogueado()) {
+            FcmRepository.registrarTokenActual()
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Crear canales de notificación
         NotificationHelper.crearCanales(this)
-
-        // Leer deep link de la notificación si la app fue abierta desde una
-        intent?.let {
-            deepLinkDestino   = it.getStringExtra(NotificationHelper.EXTRA_DESTINO)
-            deepLinkPedidoId  = it.getStringExtra(NotificationHelper.EXTRA_PEDIDO_ID)
-            deepLinkOtroNombre = it.getStringExtra(NotificationHelper.EXTRA_OTRO_NOMBRE)
-        }
-
-        // Pedir permiso de notificaciones (Android 13+)
+        leerDeepLink(intent)
         pedirPermisoNotificaciones()
 
-        // Registrar token FCM si hay sesión activa
         if (UsuarioRepository.hayUsuarioLogueado()) {
             FcmRepository.registrarTokenActual()
         }
 
         setContent {
-            AppNavigation(
-                deepLinkDestino    = deepLinkDestino,
-                deepLinkPedidoId   = deepLinkPedidoId,
-                deepLinkOtroNombre = deepLinkOtroNombre
-            )
+            CampusEatsTheme {
+                AppNavigation(
+                    deepLinkDestino    = deepLinkDestino.value,
+                    deepLinkPedidoId   = deepLinkPedidoId.value,
+                    deepLinkOtroNombre = deepLinkOtroNombre.value
+                )
+            }
+        }
+    }
+
+    // Manejar notificaciones cuando la app ya está abierta (singleTop)
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        leerDeepLink(intent)
+    }
+
+    private fun leerDeepLink(intent: Intent?) {
+        intent?.let {
+            deepLinkDestino.value    = it.getStringExtra(NotificationHelper.EXTRA_DESTINO)
+            deepLinkPedidoId.value   = it.getStringExtra(NotificationHelper.EXTRA_PEDIDO_ID)
+            deepLinkOtroNombre.value = it.getStringExtra(NotificationHelper.EXTRA_OTRO_NOMBRE)
         }
     }
 
