@@ -13,22 +13,29 @@ object ImageRepository {
         onSuccess: (String) -> Unit,
         onError: (Exception) -> Unit
     ) {
-
-        val ref = storage.reference
-            .child("productos/$productoId.jpg")
-
+        val ref = storage.reference.child("productos/$productoId.jpg")
         ref.putFile(uri)
             .continueWithTask { task ->
-                if (!task.isSuccessful) {
-                    throw task.exception ?: Exception("Error subiendo imagen")
-                }
+                if (!task.isSuccessful) throw task.exception ?: Exception("Error subiendo imagen")
                 ref.downloadUrl
             }
-            .addOnSuccessListener { downloadUrl ->
-                onSuccess(downloadUrl.toString())
+            .addOnSuccessListener { onSuccess(it.toString()) }
+            .addOnFailureListener { onError(it) }
+    }
+
+    fun subirFotoPerfil(
+        uri: Uri,
+        userId: String,
+        onSuccess: (String) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        val ref = storage.reference.child("perfiles/$userId.jpg")
+        ref.putFile(uri)
+            .continueWithTask { task ->
+                if (!task.isSuccessful) throw task.exception ?: Exception("Error")
+                ref.downloadUrl
             }
-            .addOnFailureListener {
-                onError(it)
-            }
+            .addOnSuccessListener { onSuccess(it.toString()) }
+            .addOnFailureListener { onError(it) }
     }
 }
