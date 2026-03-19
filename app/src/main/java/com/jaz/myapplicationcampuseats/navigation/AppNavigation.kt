@@ -26,6 +26,7 @@ object Routes {
     const val NOTIFICACIONES = "notificaciones"
     const val PUBLICAR = "publicar"
     const val MIS_PUBLICACIONES = "mis_publicaciones"
+    const val CHATS = "chats"
 
     fun categoria(cat: String) = "categoria/$cat"
     fun pedidoDetalle(pedidoId: String) = "pedido/$pedidoId"
@@ -106,7 +107,8 @@ fun AppNavigation() {
                 onNotificaciones = { navController.navigate(Routes.NOTIFICACIONES) },
                 onPedidosVendedor = { navController.navigate(Routes.PEDIDOS_VENDEDOR) },
                 onAjustes = { navController.navigate(Routes.AJUSTES) },
-                onMisPublicaciones = { navController.navigate(Routes.MIS_PUBLICACIONES) }
+                onMisPublicaciones = { navController.navigate(Routes.MIS_PUBLICACIONES) },
+                onChats = { navController.navigate(Routes.CHATS) }
             )
         }
 
@@ -226,6 +228,16 @@ fun AppNavigation() {
             MisPublicacionesScreen(
                 vendedorId = usuarioActual?.uid ?: "",
                 onVolver = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.CHATS) {
+            ChatsScreen(
+                userId = usuarioActual?.uid ?: "",
+                onVolver = { navController.popBackStack() },
+                onAbrirChat = { pedidoId, otroNombre ->
+                    navController.navigate(Routes.chat(pedidoId, otroNombre))
+                }
             )
         }
     }

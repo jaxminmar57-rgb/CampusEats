@@ -2,7 +2,6 @@ package com.jaz.myapplicationcampuseats.repository
 
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
-import com.google.firebase.firestore.Query
 import com.jaz.myapplicationcampuseats.model.ItemCarrito
 import com.jaz.myapplicationcampuseats.model.Pedido
 
@@ -29,7 +28,6 @@ object PedidoRepository {
 
         val doc = pedidosRef.document()
 
-        // Convertir items a mapas para Firestore
         val itemsMapa = items.map { item ->
             mapOf(
                 "productoId" to item.productoId,
@@ -59,39 +57,45 @@ object PedidoRepository {
             .addOnFailureListener { onError(it.message ?: "Error al crear pedido") }
     }
 
-    // Para el CLIENTE: observa sus pedidos en tiempo real
+    /**
+     * Listener tiempo real para el CLIENTE.
+     * Sin orderBy para evitar requerir índice compuesto — ordenamos en memoria.
+     */
     fun escucharPedidosCliente(
         clienteId: String,
         onUpdate: (List<Pedido>) -> Unit
     ): ListenerRegistration {
         return pedidosRef
             .whereEqualTo("clienteId", clienteId)
-            .orderBy("fecha", Query.Direction.DESCENDING)
-            .addSnapshotListener { snapshot, _ ->
-                val lista = snapshot?.documents?.mapNotNull {
-                    it.toObject(Pedido::class.java)
-                } ?: emptyList()
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) { onUpdate(emptyList()); return@addSnapshotListener }
+                val lista = snapshot.documents
+                    .mapNotNull { it.toObject(Pedido::class.java) }
+                    .sortedByDescending { it.fecha }
                 onUpdate(lista)
             }
     }
 
-    // Para el VENDEDOR: observa los pedidos que le llegaron en tiempo real
+    /**
+     * Listener tiempo real para el VENDEDOR.
+     * Sin orderBy — ordenamos en memoria.
+     */
     fun escucharPedidosVendedor(
         vendedorId: String,
         onUpdate: (List<Pedido>) -> Unit
     ): ListenerRegistration {
         return pedidosRef
             .whereEqualTo("vendedorId", vendedorId)
-            .orderBy("fecha", Query.Direction.DESCENDING)
-            .addSnapshotListener { snapshot, _ ->
-                val lista = snapshot?.documents?.mapNotNull {
-                    it.toObject(Pedido::class.java)
-                } ?: emptyList()
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) { onUpdate(emptyList()); return@addSnapshotListener }
+                val lista = snapshot.documents
+                    .mapNotNull { it.toObject(Pedido::class.java) }
+                    .sortedByDescending { it.fecha }
                 onUpdate(lista)
             }
     }
 
-    // Escuchar un pedido específico en tiempo real
+    /** Escucha un pedido específico en tiempo real. */
     fun escucharPedido(
         pedidoId: String,
         onUpdate: (Pedido?) -> Unit
@@ -102,7 +106,6 @@ object PedidoRepository {
             }
     }
 
-    // Vendedor: cambiar estado del pedido
     fun cambiarEstado(
         pedidoId: String,
         nuevoEstado: String,
@@ -115,32 +118,25 @@ object PedidoRepository {
             .addOnFailureListener { onError(it.message ?: "Error") }
     }
 
-    // Cliente confirma entrega (libera pago)
     fun clienteConfirmaEntrega(pedidoId: String, onSuccess: () -> Unit = {}) {
         pedidosRef.document(pedidoId)
             .update("clienteConfirmoEntrega", true)
             .addOnSuccessListener {
-                // Si el vendedor ya confirmó, marcar como completado
                 pedidosRef.document(pedidoId).get().addOnSuccessListener { doc ->
                     val vendedorConfirmo = doc.getBoolean("vendedorConfirmoEntrega") ?: false
-                    if (vendedorConfirmo) {
-                        cambiarEstado(pedidoId, "completado")
-                    }
+                    if (vendedorConfirmo) cambiarEstado(pedidoId, "completado")
                 }
                 onSuccess()
             }
     }
 
-    // Vendedor confirma entrega
     fun vendedorConfirmaEntrega(pedidoId: String, onSuccess: () -> Unit = {}) {
         pedidosRef.document(pedidoId)
             .update("vendedorConfirmoEntrega", true)
             .addOnSuccessListener {
                 pedidosRef.document(pedidoId).get().addOnSuccessListener { doc ->
                     val clienteConfirmo = doc.getBoolean("clienteConfirmoEntrega") ?: false
-                    if (clienteConfirmo) {
-                        cambiarEstado(pedidoId, "completado")
-                    }
+                    if (clienteConfirmo) cambiarEstado(pedidoId, "completado")
                 }
                 onSuccess()
             }
@@ -152,10 +148,13 @@ object PedidoRepository {
     ) {
         pedidosRef
             .whereEqualTo("clienteId", userId)
-            .orderBy("fecha", Query.Direction.DESCENDING)
             .get()
             .addOnSuccessListener { result ->
-                onResult(result.documents.mapNotNull { it.toObject(Pedido::class.java) })
+                val lista = result.documents
+                    .mapNotNull { it.toObject(Pedido::class.java) }
+                    .sortedByDescending { it.fecha }
+                onResult(lista)
             }
+            .addOnFailureListener { onResult(emptyList()) }
     }
 }

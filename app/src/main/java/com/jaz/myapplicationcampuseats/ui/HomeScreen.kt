@@ -1,5 +1,6 @@
 package com.jaz.myapplicationcampuseats.ui
 
+import androidx.compose.animation.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -24,6 +25,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
 import com.jaz.myapplicationcampuseats.R
 import com.jaz.myapplicationcampuseats.model.Producto
@@ -53,15 +55,15 @@ fun HomeScreen(
     onNotificaciones: () -> Unit,
     onPedidosVendedor: () -> Unit,
     onAjustes: () -> Unit,
-    onMisPublicaciones: () -> Unit
+    onMisPublicaciones: () -> Unit,
+    onChats: () -> Unit
 ) {
     var busqueda by remember { mutableStateOf("") }
     var menuAbierto by remember { mutableStateOf(false) }
+    var fabExpandido by remember { mutableStateOf(false) }
     var productos by remember { mutableStateOf<List<Producto>>(emptyList()) }
     var cargando by remember { mutableStateOf(true) }
 
-    // Listener en tiempo real: se actualiza automáticamente cuando
-    // cualquier vendedor publique o modifique un producto
     DisposableEffect(Unit) {
         val listener = ProductoRepository.escucharProductosDisponibles { lista ->
             productos = lista
@@ -78,9 +80,11 @@ fun HomeScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize().background(DarkBg)) {
+
+        // ── Contenido principal (scroll) ──
         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
 
-            // --- Barra superior ---
+            // Barra superior
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -110,7 +114,7 @@ fun HomeScreen(
                 }
             }
 
-            // --- Barra de búsqueda ---
+            // Barra de búsqueda
             OutlinedTextField(
                 value = busqueda,
                 onValueChange = { busqueda = it },
@@ -139,7 +143,7 @@ fun HomeScreen(
             Spacer(modifier = Modifier.height(12.dp))
 
             if (busqueda.isEmpty()) {
-                // --- Carrusel banner ---
+                // Carrusel banner
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -152,16 +156,16 @@ fun HomeScreen(
                                 .background(DarkCard),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(text = texto, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                            Text(texto, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // --- Categorías ---
+                // Categorías
                 Text(
-                    text = "Categorías",
+                    "Categorías",
                     color = Color.White,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
@@ -178,10 +182,7 @@ fun HomeScreen(
                             modifier = Modifier.clickable { onCategoria(nombre) }
                         ) {
                             Box(
-                                modifier = Modifier
-                                    .size(62.dp)
-                                    .clip(CircleShape)
-                                    .background(DarkSurface),
+                                modifier = Modifier.size(62.dp).clip(CircleShape).background(DarkSurface),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Image(
@@ -192,27 +193,22 @@ fun HomeScreen(
                                 )
                             }
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text(text = nombre, color = Color.White, fontSize = 11.sp)
+                            Text(nombre, color = Color.White, fontSize = 11.sp)
                         }
                     }
                 }
                 Spacer(modifier = Modifier.height(20.dp))
             }
 
-            // --- Título sección productos ---
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = if (busqueda.isEmpty()) "Disponibles ahora"
-                           else "Resultados para \"$busqueda\"",
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+            // Título productos
+            Text(
+                text = if (busqueda.isEmpty()) "Disponibles ahora"
+                       else "Resultados para \"$busqueda\"",
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
             Spacer(modifier = Modifier.height(10.dp))
 
             when {
@@ -229,8 +225,8 @@ fun HomeScreen(
                         Text("🔍", fontSize = 48.sp)
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = if (busqueda.isEmpty()) "No hay platillos disponibles"
-                                   else "Sin resultados para \"$busqueda\"",
+                            if (busqueda.isEmpty()) "No hay platillos disponibles"
+                            else "Sin resultados para \"$busqueda\"",
                             color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold
                         )
                         if (busqueda.isEmpty()) {
@@ -260,87 +256,150 @@ fun HomeScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(90.dp))
+            Spacer(modifier = Modifier.height(100.dp))
         }
 
-        // --- FAB publicar ---
-        FloatingActionButton(
-            onClick = onPublicar,
-            containerColor = GreenBtn,
-            contentColor = Color.White,
-            shape = CircleShape,
+        // ── Speed Dial FAB ──
+        // Overlay para cerrar el speed dial al tocar fuera
+        if (fabExpandido) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.3f))
+                    .clickable { fabExpandido = false }
+                    .zIndex(1f)
+            )
+        }
+
+        Column(
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 24.dp)
-                .size(62.dp)
+                .align(Alignment.BottomEnd)
+                .padding(end = 20.dp, bottom = 24.dp)
+                .zIndex(2f),
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Icon(Icons.Default.Add, contentDescription = "Publicar", modifier = Modifier.size(30.dp))
+            // Opciones del speed dial (aparecen al expandir)
+            AnimatedVisibility(
+                visible = fabExpandido,
+                enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
+                exit = fadeOut() + slideOutVertically(targetOffsetY = { it })
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    SpeedDialOpcion(
+                        icono = Icons.Default.ShoppingCart,
+                        etiqueta = "Ver carrito",
+                        onClick = { fabExpandido = false; onCarrito() }
+                    )
+                    SpeedDialOpcion(
+                        icono = Icons.Default.AddBox,
+                        etiqueta = "Publicar platillo",
+                        onClick = { fabExpandido = false; onPublicar() }
+                    )
+                }
+            }
+
+            // Botón principal del FAB
+            FloatingActionButton(
+                onClick = { fabExpandido = !fabExpandido },
+                containerColor = GreenBtn,
+                contentColor = Color.White,
+                shape = CircleShape,
+                modifier = Modifier.size(60.dp)
+            ) {
+                Icon(
+                    if (fabExpandido) Icons.Default.Close else Icons.Default.Add,
+                    contentDescription = "Acciones",
+                    modifier = Modifier.size(28.dp)
+                )
+            }
         }
 
-        // --- Menú lateral ---
+        // ── Menú lateral ──
+        // El overlay y el panel son independientes con zIndex para que
+        // los toques en el panel no cierren el menú
         if (menuAbierto) {
+            // Overlay oscuro — solo cubre el área fuera del panel
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.55f))
                     .clickable { menuAbierto = false }
+                    .zIndex(10f)
             )
+
+            // Panel del menú — zIndex mayor para estar encima del overlay
             Column(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .width(270.dp)
+                    .width(275.dp)
                     .align(Alignment.CenterStart)
                     .background(Color(0xFF1A3320))
-                    .padding(24.dp)
+                    .padding(horizontal = 20.dp, vertical = 24.dp)
+                    .zIndex(11f)
+                    .clickable(enabled = false) {} // bloquea que los toques pasen al overlay
             ) {
-                Spacer(modifier = Modifier.height(48.dp))
+                Spacer(modifier = Modifier.height(32.dp))
 
                 // Avatar + nombre
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
-                            .size(50.dp)
+                            .size(52.dp)
                             .clip(CircleShape)
                             .background(DarkSurface),
                         contentAlignment = Alignment.Center
                     ) {
                         if (usuario?.fotoPerfil?.isNotEmpty() == true) {
-                            AsyncImage(model = usuario.fotoPerfil, contentDescription = null,
-                                modifier = Modifier.fillMaxSize().clip(CircleShape))
+                            AsyncImage(
+                                model = usuario.fotoPerfil,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
                         } else {
                             Icon(Icons.Default.Person, null, tint = Color.White, modifier = Modifier.size(28.dp))
                         }
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
-                        Text(usuario?.nombre ?: "", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            usuario?.nombre ?: "",
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                         Text(usuario?.correo ?: "", color = Color.Gray, fontSize = 12.sp)
                     }
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(20.dp))
                 HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                Text("CLIENTE", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(8.dp))
+                Text("CLIENTE", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                Spacer(modifier = Modifier.height(6.dp))
                 MenuOpcion(Icons.Default.Receipt, "Mis pedidos") { menuAbierto = false; onHistorial() }
                 MenuOpcion(Icons.Default.ShoppingCart, "Carrito") { menuAbierto = false; onCarrito() }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
                 HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                Text("VENDEDOR", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(8.dp))
+                Text("VENDEDOR", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                Spacer(modifier = Modifier.height(6.dp))
                 MenuOpcion(Icons.Default.Add, "Publicar platillo") { menuAbierto = false; onPublicar() }
                 MenuOpcion(Icons.Default.List, "Pedidos recibidos") { menuAbierto = false; onPedidosVendedor() }
                 MenuOpcion(Icons.Default.RestaurantMenu, "Mis publicaciones") { menuAbierto = false; onMisPublicaciones() }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
                 HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
+                MenuOpcion(Icons.Default.ChatBubble, "Chats") { menuAbierto = false; onChats() }
                 MenuOpcion(Icons.Default.Person, "Mi cuenta") { menuAbierto = false; onCuenta() }
                 MenuOpcion(Icons.Default.Settings, "Ajustes") { menuAbierto = false; onAjustes() }
 
@@ -352,6 +411,45 @@ fun HomeScreen(
                     onCerrarSesion()
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun SpeedDialOpcion(
+    icono: ImageVector,
+    etiqueta: String,
+    onClick: () -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.End,
+        modifier = Modifier.clickable { onClick() }
+    ) {
+        // Etiqueta
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = Color(0xFF1A3320),
+            shadowElevation = 4.dp
+        ) {
+            Text(
+                etiqueta,
+                color = Color.White,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        // Mini FAB
+        FloatingActionButton(
+            onClick = onClick,
+            containerColor = DarkCard,
+            contentColor = GreenBtn,
+            shape = CircleShape,
+            modifier = Modifier.size(44.dp)
+        ) {
+            Icon(icono, contentDescription = etiqueta, modifier = Modifier.size(22.dp))
         }
     }
 }
@@ -372,12 +470,17 @@ fun ProductoMiniCard(
                 AsyncImage(
                     model = producto.imagenUrl,
                     contentDescription = producto.nombre,
-                    modifier = Modifier.fillMaxWidth().height(100.dp).clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(100.dp)
+                        .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
                     contentScale = ContentScale.Crop
                 )
             } else {
                 Box(
-                    modifier = Modifier.fillMaxWidth().height(100.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(100.dp)
                         .background(DarkSurface2, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
                     contentAlignment = Alignment.Center
                 ) { Text("🍽️", fontSize = 36.sp) }
@@ -407,11 +510,11 @@ fun MenuOpcion(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .padding(vertical = 12.dp),
+            .padding(vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icono, contentDescription = texto, tint = tint, modifier = Modifier.size(22.dp))
+        Icon(icono, contentDescription = texto, tint = tint, modifier = Modifier.size(21.dp))
         Spacer(modifier = Modifier.width(14.dp))
-        Text(text = texto, color = tint, fontSize = 15.sp)
+        Text(texto, color = tint, fontSize = 15.sp)
     }
 }

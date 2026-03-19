@@ -4,10 +4,12 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -17,7 +19,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -32,25 +36,41 @@ fun AjustesScreen(
     onUsuarioActualizado: (Usuario) -> Unit,
     onCerrarSesion: () -> Unit
 ) {
+    val uid = usuario?.uid ?: ""
+
+    // Perfil
+    var telefono by remember { mutableStateOf(usuario?.telefono ?: "") }
+    var sexo by remember { mutableStateOf(usuario?.sexo ?: "") }
+    var menuSexoAbierto by remember { mutableStateOf(false) }
+
+    // Vendedor
     var preferenciaEntrega by remember { mutableStateOf(usuario?.preferenciaEntrega ?: "cliente_recoge") }
     var ubicacionDescripcion by remember { mutableStateOf(usuario?.ubicacionDescripcion ?: "") }
+
     var guardando by remember { mutableStateOf(false) }
     var guardado by remember { mutableStateOf(false) }
+    var subiendoFoto by remember { mutableStateOf(false) }
     var mostrarDialogoCerrarSesion by remember { mutableStateOf(false) }
 
-    val fotoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+    val opcionesSexo = listOf("Masculino", "Femenino", "Prefiero no decir")
+
+    val fotoLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
         uri?.let {
-            val uid = usuario?.uid ?: return@let
+            if (uid.isEmpty()) return@let
+            subiendoFoto = true
             ImageRepository.subirFotoPerfil(
                 uri = it,
                 userId = uid,
                 onSuccess = { url ->
+                    subiendoFoto = false
                     UsuarioRepository.actualizarPerfil(uid, mapOf("fotoPerfil" to url)) {
                         val actualizado = usuario?.copy(fotoPerfil = url)
                         actualizado?.let { u -> onUsuarioActualizado(u) }
                     }
                 },
-                onError = {}
+                onError = { subiendoFoto = false }
             )
         }
     }
@@ -92,59 +112,147 @@ fun AjustesScreen(
             Text("Ajustes", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
 
-        // Foto de perfil
-        SectionCard {
+        // ── Foto de perfil ──
+        AjustesSectionCard {
             Text("Foto de perfil", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    modifier = Modifier.size(64.dp).clip(CircleShape).background(DarkSurface2),
+                    modifier = Modifier
+                        .size(70.dp)
+                        .clip(CircleShape)
+                        .background(DarkSurface2),
                     contentAlignment = Alignment.Center
                 ) {
                     if (usuario?.fotoPerfil?.isNotEmpty() == true) {
                         AsyncImage(
                             model = usuario.fotoPerfil,
                             contentDescription = null,
-                            modifier = Modifier.fillMaxSize().clip(CircleShape)
+                            modifier = Modifier.fillMaxSize().clip(CircleShape),
+                            contentScale = ContentScale.Crop
                         )
                     } else {
                         Icon(Icons.Default.Person, null, tint = Color.White, modifier = Modifier.size(36.dp))
+                    }
+                    if (subiendoFoto) {
+                        Box(
+                            modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = GreenBtn, modifier = Modifier.size(24.dp))
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.width(16.dp))
                 OutlinedButton(
                     onClick = { fotoLauncher.launch("image/*") },
-                    shape = RoundedCornerShape(10.dp)
-                ) { Text("Cambiar foto", color = GreenBtn) }
+                    shape = RoundedCornerShape(10.dp),
+                    enabled = !subiendoFoto
+                ) {
+                    Text(if (subiendoFoto) "Subiendo..." else "Cambiar foto", color = GreenBtn)
+                }
             }
         }
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // Preferencia de entrega
-        SectionCard {
+        // ── Información personal ──
+        AjustesSectionCard {
+            Text("👤 Información personal", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text("Correo y edad no se pueden cambiar", color = Color.Gray, fontSize = 12.sp)
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Info no editable
+            InfoFilaAjuste("Correo", usuario?.correo ?: "—")
+            InfoFilaAjuste("Edad", if ((usuario?.edad ?: "").isNotEmpty()) "${usuario?.edad} años" else "—")
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Teléfono (editable)
+            OutlinedTextField(
+                value = telefono,
+                onValueChange = {
+                    if (it.length <= 15 && it.all { c -> c.isDigit() || c == '+' }) {
+                        telefono = it
+                        guardado = false
+                    }
+                },
+                label = { Text("Teléfono (opcional)", color = Color.Gray) },
+                leadingIcon = { Icon(Icons.Default.Phone, null, tint = Color.Gray) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                colors = camposColores(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                singleLine = true
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Sexo (editable, dropdown)
+            Box {
+                OutlinedTextField(
+                    value = sexo,
+                    onValueChange = {},
+                    label = { Text("Sexo", color = Color.Gray) },
+                    leadingIcon = { Icon(Icons.Default.People, null, tint = Color.Gray) },
+                    trailingIcon = {
+                        IconButton(onClick = { menuSexoAbierto = true }) {
+                            Icon(Icons.Default.ArrowDropDown, null, tint = Color.Gray)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = camposColores(),
+                    readOnly = true,
+                    singleLine = true,
+                    placeholder = { Text("Seleccionar...", color = Color.Gray) }
+                )
+                // Área clickeable encima del campo para abrir el menú
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clickable { menuSexoAbierto = true }
+                )
+                DropdownMenu(
+                    expanded = menuSexoAbierto,
+                    onDismissRequest = { menuSexoAbierto = false },
+                    modifier = Modifier.background(DarkSurface)
+                ) {
+                    opcionesSexo.forEach { opcion ->
+                        DropdownMenuItem(
+                            text = { Text(opcion, color = Color.White) },
+                            onClick = { sexo = opcion; menuSexoAbierto = false; guardado = false }
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // ── Preferencia de entrega (vendedor) ──
+        AjustesSectionCard {
             Text("🚗 Preferencia de entrega", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                "Cuando alguien haga un pedido de tus platillos, ¿cómo prefieren coordinar la entrega?",
+                "¿Cómo coordinas la entrega cuando recibes un pedido?",
                 color = Color.Gray, fontSize = 13.sp
             )
             Spacer(modifier = Modifier.height(12.dp))
 
             listOf(
-                Triple("cliente_recoge", "El cliente me recoge", "El cliente va a tu ubicación a recoger su pedido"),
-                Triple("vendedor_lleva", "Yo llevo el pedido", "Tú llevas el pedido a la ubicación del cliente"),
-                Triple("ambos", "Ambas opciones", "Coordinan entre ambos según convenga")
+                Triple("cliente_recoge", "El cliente me recoge", "El cliente va a tu ubicación"),
+                Triple("vendedor_lleva", "Yo llevo el pedido", "Tú vas donde el cliente"),
+                Triple("ambos", "Ambas opciones", "Se coordina en el chat")
             ).forEach { (valor, titulo, descripcion) ->
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     RadioButton(
                         selected = preferenciaEntrega == valor,
-                        onClick = { preferenciaEntrega = valor },
+                        onClick = { preferenciaEntrega = valor; guardado = false },
                         colors = RadioButtonDefaults.colors(selectedColor = GreenBtn)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -157,15 +265,12 @@ fun AjustesScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Descripción de ubicación
-            Text("Descripción de tu ubicación (opcional)", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text("Ej: Cafetería principal, planta baja", color = Color.Gray, fontSize = 12.sp)
-            Spacer(modifier = Modifier.height(6.dp))
             OutlinedTextField(
                 value = ubicacionDescripcion,
-                onValueChange = { ubicacionDescripcion = it },
-                placeholder = { Text("Describe dónde encuentras...", color = Color.Gray) },
+                onValueChange = { ubicacionDescripcion = it; guardado = false },
+                label = { Text("Descripción de tu ubicación (opcional)", color = Color.Gray) },
+                placeholder = { Text("Ej: Cafetería principal, planta baja", color = Color.Gray) },
+                leadingIcon = { Icon(Icons.Default.LocationOn, null, tint = Color.Gray) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(10.dp),
                 colors = camposColores(),
@@ -175,7 +280,7 @@ fun AjustesScreen(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // Guardar cambios
+        // ── Guardar cambios ──
         Card(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
             shape = RoundedCornerShape(16.dp),
@@ -183,28 +288,34 @@ fun AjustesScreen(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 if (guardado) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("✅", fontSize = 18.sp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(bottom = 10.dp)
+                    ) {
+                        Icon(Icons.Default.CheckCircle, null, tint = GreenBtn, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Cambios guardados", color = GreenBtn, fontSize = 14.sp)
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
                 }
                 Button(
                     onClick = {
-                        val uid = usuario?.uid ?: return@Button
+                        if (uid.isEmpty()) return@Button
                         guardando = true
                         val campos = mapOf(
+                            "telefono" to telefono.trim(),
+                            "sexo" to sexo,
                             "preferenciaEntrega" to preferenciaEntrega,
-                            "ubicacionDescripcion" to ubicacionDescripcion
+                            "ubicacionDescripcion" to ubicacionDescripcion.trim()
                         )
                         UsuarioRepository.actualizarPerfil(uid, campos,
                             onSuccess = {
                                 guardando = false
                                 guardado = true
                                 val actualizado = usuario?.copy(
+                                    telefono = telefono.trim(),
+                                    sexo = sexo,
                                     preferenciaEntrega = preferenciaEntrega,
-                                    ubicacionDescripcion = ubicacionDescripcion
+                                    ubicacionDescripcion = ubicacionDescripcion.trim()
                                 )
                                 actualizado?.let { onUsuarioActualizado(it) }
                             },
@@ -219,6 +330,8 @@ fun AjustesScreen(
                     if (guardando) {
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp))
                     } else {
+                        Icon(Icons.Default.Save, null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text("Guardar cambios", fontWeight = FontWeight.Bold)
                     }
                 }
@@ -227,15 +340,13 @@ fun AjustesScreen(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // Cerrar sesión
+        // ── Cerrar sesión ──
         Card(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = DarkSurface)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Cuenta", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(12.dp))
                 OutlinedButton(
                     onClick = { mostrarDialogoCerrarSesion = true },
                     modifier = Modifier.fillMaxWidth().height(48.dp),
@@ -251,4 +362,27 @@ fun AjustesScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
     }
+}
+
+@Composable
+fun AjustesSectionCard(content: @Composable ColumnScope.() -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), content = content)
+    }
+}
+
+@Composable
+fun InfoFilaAjuste(label: String, valor: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, color = Color.Gray, fontSize = 14.sp)
+        Text(valor, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+    }
+    HorizontalDivider(color = Color.White.copy(alpha = 0.07f))
 }
