@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
@@ -29,13 +30,19 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/** Singleton para saber en qué chat está el usuario (suprime notificaciones) */
+object ChatActivo {
+    var pedidoId: String? = null
+}
+
 @Composable
 fun ChatScreen(
     pedidoId: String,
     usuarioActual: Usuario?,
     otroNombre: String,
     onVolver: () -> Unit,
-    onVerPedido: (() -> Unit)? = null
+    onVerPedido: (() -> Unit)? = null,
+    onVerPerfil: ((uid: String) -> Unit)? = null
 ) {
     var mensajes by remember { mutableStateOf<List<MensajeChat>>(emptyList()) }
     var texto    by remember { mutableStateOf("") }
@@ -46,6 +53,12 @@ fun ChatScreen(
 
     val uid    = usuarioActual?.uid    ?: ""
     val nombre = usuarioActual?.nombre ?: ""
+
+    // Registrar/limpiar chat activo (suprime notificaciones de este chat)
+    DisposableEffect(pedidoId) {
+        ChatActivo.pedidoId = pedidoId
+        onDispose { ChatActivo.pedidoId = null }
+    }
 
     // Pedido en tiempo real
     DisposableEffect(pedidoId) {
@@ -60,6 +73,13 @@ fun ChatScreen(
             scope.launch { if (lista.isNotEmpty()) listState.animateScrollToItem(lista.size - 1) }
         }
         onDispose { listener.remove() }
+    }
+
+    // Scroll al fondo cuando el teclado se abre (layoutInfo cambia)
+    LaunchedEffect(listState.layoutInfo.viewportEndOffset, mensajes.size) {
+        if (mensajes.isNotEmpty()) {
+            listState.animateScrollToItem(mensajes.size - 1)
+        }
     }
 
     val destinatarioUid = remember(pedido, uid) {
@@ -103,6 +123,12 @@ fun ChatScreen(
                     pedido?.let { p ->
                         val info = estadoInfo(p.estado)
                         Text("${info.emoji} ${info.label}", color = info.color, fontSize = 12.sp)
+                    }
+                }
+                // Botón para ver perfil de la otra persona
+                if (onVerPerfil != null && destinatarioUid.isNotEmpty()) {
+                    IconButton(onClick = { onVerPerfil(destinatarioUid) }) {
+                        Icon(Icons.Default.Person, "Ver perfil", tint = GreenBtn)
                     }
                 }
                 // Botón para ir al detalle del pedido
@@ -196,6 +222,25 @@ fun ChatScreen(
         }
 
         // ── Input FIJO (sube con el teclado gracias a imePadding) ──
+        val chatBloqueado = pedido?.estado in listOf("completado", "cancelado")
+
+        if (chatBloqueado) {
+            // Mensaje de chat cerrado
+            Row(
+                modifier = Modifier.fillMaxWidth()
+                    .background(Color(0xFF16213E))
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("🔒 ", fontSize = 14.sp)
+                Text(
+                    if (pedido?.estado == "completado") "Pedido completado — chat cerrado"
+                    else "Pedido cancelado — chat cerrado",
+                    color = Color.Gray, fontSize = 13.sp
+                )
+            }
+        } else {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -241,5 +286,6 @@ fun ChatScreen(
                 Icon(Icons.Default.Send, null, tint = Color.White)
             }
         }
+        } // else chatBloqueado
     }
 }

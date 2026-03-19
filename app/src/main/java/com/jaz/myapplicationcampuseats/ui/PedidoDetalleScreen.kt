@@ -2,6 +2,7 @@ package com.jaz.myapplicationcampuseats.ui
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -33,6 +34,7 @@ fun PedidoDetalleScreen(
     usuarioActual: Usuario?,
     onVolver: () -> Unit,
     onChat: (otroNombre: String) -> Unit,
+    onVerPerfil: (uid: String) -> Unit = {},
     vm: PedidoDetalleViewModel = viewModel()
 ) {
     val uid = usuarioActual?.uid ?: ""
@@ -152,8 +154,22 @@ fun PedidoDetalleScreen(
                     Column(modifier = Modifier.padding(14.dp)) {
                         Text("Información", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(8.dp))
-                        InfoRow("👤 ${if (esVendedor) "Cliente" else "Vendedor"}",
-                            if (esVendedor) p.nombreCliente else p.nombreVendedor)
+                        // Nombre clickable para ir al perfil
+                        Row(modifier = Modifier.fillMaxWidth().clickable {
+                            val perfilUid = if (esVendedor) p.clienteId else p.vendedorId
+                            onVerPerfil(perfilUid)
+                        }.padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text("👤 ${if (esVendedor) "Cliente" else "Vendedor"}", color = Color.Gray, fontSize = 13.sp)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(if (esVendedor) p.nombreCliente else p.nombreVendedor,
+                                    color = GreenBtn, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(Icons.Default.Person, null, tint = GreenBtn, modifier = Modifier.size(14.dp))
+                            }
+                        }
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.07f), modifier = Modifier.padding(vertical = 2.dp))
                         InfoRow("📦 Entrega", textoEntregaLargo(p.preferenciaEntrega))
                         InfoRow("💳 Pago",
                             if (p.metodoPago == "tarjeta") "Tarjeta — se libera al confirmar" else "Efectivo")
@@ -224,9 +240,14 @@ fun PedidoDetalleScreen(
                 }
             }
 
-            // Acciones CLIENTE
-            if (esCliente && p.estado in listOf("listo", "aceptado") && !p.clienteConfirmoEntrega) {
+            // Acciones CLIENTE — solo puede confirmar cuando está LISTO
+            if (esCliente && p.estado == "listo" && !p.clienteConfirmoEntrega) {
                 item {
+                    val textoBoton = when (p.preferenciaEntrega) {
+                        "vendedor_lleva" -> "Confirmar que recibí mi pedido"
+                        "cliente_recoge" -> "Ya recogí mi pedido"
+                        else -> "Confirmar entrega"
+                    }
                     Button(
                         onClick = { vm.clienteConfirma() },
                         modifier = Modifier.fillMaxWidth().height(50.dp),
@@ -236,7 +257,7 @@ fun PedidoDetalleScreen(
                     ) {
                         Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Confirmar que recibí mi pedido", fontWeight = FontWeight.Bold)
+                        Text(textoBoton, fontWeight = FontWeight.Bold)
                     }
                     if (p.metodoPago == "tarjeta") {
                         Spacer(modifier = Modifier.height(4.dp))
@@ -395,11 +416,13 @@ fun DialogoResena(
             Button(onClick = {
                 enviando = true
                 ResenaRepository.enviarResena(
-                    com.jaz.myapplicationcampuseats.model.Resena(
+                    resena = com.jaz.myapplicationcampuseats.model.Resena(
                         pedidoId = pedido.id, autorId = autorId, autorNombre = autorNombre,
                         destinatarioId = destinatarioId, rolDestinatario = rolDestinatario,
-                        estrellas = estrellas, comentario = comentario)
-                ) { enviando = false; onEnviado() }
+                        estrellas = estrellas, comentario = comentario),
+                    onSuccess = { enviando = false; onEnviado() },
+                    onError = { enviando = false }
+                )
             }, colors = ButtonDefaults.buttonColors(containerColor = GreenBtn), enabled = !enviando) {
                 Text("Enviar")
             }

@@ -21,6 +21,13 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val cuerpo    = remoteMessage.notification?.body  ?: data["cuerpo"] ?: ""
         val otroNombre = data["otroNombre"] ?: ""
 
+        // Suprimir notificación de chat si el usuario ya está en ese chat
+        if (tipo == "chat" && pedidoId.isNotEmpty()) {
+            if (com.jaz.myapplicationcampuseats.ui.ChatActivo.pedidoId == pedidoId) {
+                return
+            }
+        }
+
         NotificationHelper.crearCanales(applicationContext)
 
         when (tipo) {

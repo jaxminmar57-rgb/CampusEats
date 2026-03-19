@@ -49,12 +49,15 @@ object ResenaRepository {
         resenasRef
             .whereEqualTo("destinatarioId", usuarioId)
             .whereEqualTo("rolDestinatario", rol)
-            .orderBy("fecha", com.google.firebase.firestore.Query.Direction.DESCENDING)
-            .limit(20)
             .get()
             .addOnSuccessListener { result ->
-                onResult(result.documents.mapNotNull { it.toObject(Resena::class.java) })
+                val lista = result.documents
+                    .mapNotNull { it.toObject(Resena::class.java) }
+                    .sortedByDescending { it.fecha }
+                    .take(20)
+                onResult(lista)
             }
+            .addOnFailureListener { onResult(emptyList()) }
     }
 
     // Verificar si el usuario ya calificó en ese pedido (evitar duplicados)

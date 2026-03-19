@@ -16,5 +16,6 @@ data class Producto(
     val fechaPublicacion: Long = System.currentTimeMillis(),
     // Stock
     val cantidadDisponible: Int = -1,    // -1 = sin límite
-    val mostrarCantidad: Boolean = false  // si true, clientes ven cuántas quedan
+    val mostrarCantidad: Boolean = false,  // si true, clientes ven cuántas quedan
+    val ubicacionVendedor: String = ""     // ubicación del vendedor al publicar
 )

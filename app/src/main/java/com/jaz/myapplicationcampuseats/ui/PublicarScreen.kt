@@ -28,12 +28,18 @@ import com.jaz.myapplicationcampuseats.model.Producto
 import com.jaz.myapplicationcampuseats.repository.ImageRepository
 import com.jaz.myapplicationcampuseats.repository.ProductoRepository
 
-val categoriasLista = listOf("Hamburguesas", "Pizza", "Pastas", "Bebidas", "Ensaladas", "Burritos", "Sandwich", "Otros")
+val categoriasLista = listOf(
+    "Hamburguesas", "Pizza", "Pastas", "Bebidas", "Ensaladas", "Burritos",
+    "Sandwich", "Tacos", "Tortas", "Quesadillas", "Hot Dogs", "Sushi",
+    "Alitas", "Postres", "Snacks", "Desayunos", "Comida Corrida", "Mariscos",
+    "Antojitos", "Saludable", "Café", "Otros"
+)
 
 @Composable
 fun PublicarScreen(
     userId: String,
     nombreVendedor: String,
+    ubicacionVendedor: String = "",
     onVolver: () -> Unit,
     productoExistente: Producto? = null   // null = nuevo, not null = edición
 ) {
@@ -107,16 +113,46 @@ fun PublicarScreen(
 
             Spacer(Modifier.height(14.dp))
 
-            // Categoría
+            // Categoría con búsqueda
             Text("Categoría *", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(6.dp))
+            var busquedaCategoria by remember { mutableStateOf("") }
+            val categoriasFiltradas = remember(busquedaCategoria) {
+                if (busquedaCategoria.isBlank()) categoriasLista
+                else categoriasLista.filter {
+                    coincideFuzzy(it, busquedaCategoria)
+                }
+            }
             Box {
                 OutlinedButton(onClick = { menuCategoriaAbierto = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)) {
                     Text(categoriaSeleccionada, color = Color.White)
                 }
-                DropdownMenu(expanded = menuCategoriaAbierto, onDismissRequest = { menuCategoriaAbierto = false }) {
-                    categoriasLista.forEach { cat ->
-                        DropdownMenuItem(text = { Text(cat) }, onClick = { categoriaSeleccionada = cat; menuCategoriaAbierto = false })
+                DropdownMenu(
+                    expanded = menuCategoriaAbierto,
+                    onDismissRequest = { menuCategoriaAbierto = false; busquedaCategoria = "" },
+                    modifier = Modifier.heightIn(max = 300.dp)
+                ) {
+                    OutlinedTextField(
+                        value = busquedaCategoria,
+                        onValueChange = { busquedaCategoria = it },
+                        placeholder = { Text("Buscar categoría...", color = Color.Gray, fontSize = 13.sp) },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp)
+                    )
+                    categoriasFiltradas.forEach { cat ->
+                        DropdownMenuItem(
+                            text = { Text(cat) },
+                            onClick = { categoriaSeleccionada = cat; menuCategoriaAbierto = false; busquedaCategoria = "" }
+                        )
+                    }
+                    if (categoriasFiltradas.isEmpty()) {
+                        DropdownMenuItem(
+                            text = { Text("Sin resultados", color = Color.Gray) },
+                            onClick = {},
+                            enabled = false
+                        )
                     }
                 }
             }
@@ -202,7 +238,8 @@ fun PublicarScreen(
                                     "nombre" to nombre.trim(), "descripcion" to descripcion.trim(),
                                     "ingredientes" to ingredientes.trim(), "precio" to precio.toDouble(),
                                     "categoria" to categoriaSeleccionada, "cantidadDisponible" to cantidad,
-                                    "mostrarCantidad" to (mostrarCantidad && cantidad >= 0)
+                                    "mostrarCantidad" to (mostrarCantidad && cantidad >= 0),
+                                    "ubicacionVendedor" to ubicacionVendedor
                                 )
                                 fun guardarEdicion(url: String) {
                                     if (url.isNotEmpty()) campos["imagenUrl"] = url
@@ -223,7 +260,8 @@ fun PublicarScreen(
                                         Producto(id = productoId, nombre = nombre.trim(), descripcion = descripcion.trim(),
                                             ingredientes = ingredientes.trim(), precio = precio.toDouble(), imagenUrl = url,
                                             categoria = categoriaSeleccionada, vendedorId = userId, nombreVendedor = nombreVendedor,
-                                            disponible = true, cantidadDisponible = cantidad, mostrarCantidad = mostrarCantidad && cantidad >= 0),
+                                            disponible = true, cantidadDisponible = cantidad, mostrarCantidad = mostrarCantidad && cantidad >= 0,
+                                            ubicacionVendedor = ubicacionVendedor),
                                         onSuccess = { publicando = false; publicado = true },
                                         onError = { publicando = false; error = "Error: ${it.message}" })
                                 }

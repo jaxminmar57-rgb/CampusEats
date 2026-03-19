@@ -186,7 +186,8 @@ fun AppNavigation(
                 onVolver = { navController.popBackStack() },
                 onChat = { otroNombre ->
                     navController.navigate(Routes.chat(pedidoId, otroNombre))
-                }
+                },
+                onVerPerfil = { uid -> navController.navigate(Routes.perfil(uid)) }
             )
         }
 
@@ -213,7 +214,8 @@ fun AppNavigation(
                 usuarioActual = usuarioActual,
                 otroNombre = otroNombre,
                 onVolver = { navController.popBackStack() },
-                onVerPedido = { navController.navigate(Routes.pedidoDetalle(pedidoId)) }
+                onVerPedido = { navController.navigate(Routes.pedidoDetalle(pedidoId)) },
+                onVerPerfil = { uid -> navController.navigate(Routes.perfil(uid)) }
             )
         }
 
@@ -266,6 +268,7 @@ fun AppNavigation(
             PublicarScreen(
                 userId = usuarioActual?.uid ?: "",
                 nombreVendedor = usuarioActual?.nombre ?: "",
+                ubicacionVendedor = usuarioActual?.ubicacionDescripcion ?: "",
                 onVolver = { navController.popBackStack() }
             )
         }
@@ -333,6 +336,7 @@ fun AppNavigation(
                 PublicarScreen(
                     userId = usuarioActual?.uid ?: "",
                     nombreVendedor = usuarioActual?.nombre ?: "",
+                    ubicacionVendedor = usuarioActual?.ubicacionDescripcion ?: "",
                     onVolver = { navController.popBackStack() },
                     productoExistente = productoEditar
                 )

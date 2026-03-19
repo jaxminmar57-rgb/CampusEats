@@ -159,7 +159,8 @@ fun TiendaScreen(
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text("⭐", fontSize = 13.sp)
-                                            Text(" ${String.format("%.1f", t.ratingPromedio)}", color = GoldStar, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                            val storeRating = if (t.ratingPromedio > 0) String.format("%.1f", t.ratingPromedio) else "-"
+                                            Text(" $storeRating", color = GoldStar, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                                             Text(" (${t.numResenas})", color = Color.Gray, fontSize = 12.sp)
                                         }
                                         Text("·", color = Color.Gray)
@@ -221,7 +222,8 @@ fun TiendaScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text("⭐", fontSize = 11.sp)
-                                        Text(" ${String.format("%.1f", producto.rating)}", color = Color.Gray, fontSize = 11.sp)
+                                        val rTxt = if (producto.rating > 0) String.format("%.1f", producto.rating) else "-"
+                                        Text(" $rTxt", color = Color.Gray, fontSize = 11.sp)
                                     }
                                     Text("\$${String.format("%.0f", producto.precio)}", color = GreenBtn, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                                 }

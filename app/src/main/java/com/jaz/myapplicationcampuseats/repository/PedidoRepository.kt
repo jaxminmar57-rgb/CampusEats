@@ -59,7 +59,11 @@ object PedidoRepository {
     fun clienteConfirmaEntrega(pedidoId: String, onSuccess: () -> Unit = {}) {
         pedidosRef.document(pedidoId).update("clienteConfirmoEntrega", true).addOnSuccessListener {
             pedidosRef.document(pedidoId).get().addOnSuccessListener { doc ->
-                if (doc.getBoolean("vendedorConfirmoEntrega") == true) cambiarEstado(pedidoId, "completado")
+                if (doc.getBoolean("vendedorConfirmoEntrega") == true) {
+                    cambiarEstado(pedidoId, "completado")
+                    val items = (doc.get("items") as? List<Map<String, Any>>) ?: emptyList()
+                    ProductoRepository.descontarStockPorPedido(items)
+                }
             }
             onSuccess()
         }

@@ -25,6 +25,7 @@ class PedidoDetalleViewModel : ViewModel() {
 
     private var listener: ListenerRegistration? = null
     private var pedidoIdActual = ""
+    private var estadoEsperado: String? = null
 
     fun iniciarListener(pedidoId: String, uid: String) {
         if (pedidoId == pedidoIdActual && listener != null) return
@@ -35,38 +36,49 @@ class PedidoDetalleViewModel : ViewModel() {
             pedido = p
             cargando = false
 
-            // Cargar ubicación del vendedor si el cliente recoge
+            // Resetear procesando cuando llega el estado que esperamos del snapshot
+            if (estadoEsperado != null) {
+                if (p?.estado == estadoEsperado ||
+                    p?.clienteConfirmoEntrega == true ||
+                    p?.vendedorConfirmoEntrega == true) {
+                    procesando = false
+                    estadoEsperado = null
+                }
+            }
+
             if (p != null && p.preferenciaEntrega == "cliente_recoge") {
                 UsuarioRepository.obtenerUsuario(p.vendedorId, onSuccess = { v ->
                     ubicacionVendedor = v.ubicacionDescripcion
                 })
             }
 
-            // Verificar si ya calificaron
             if (p?.estado == "completado" && uid.isNotEmpty()) {
                 ResenaRepository.yaCalificoPedido(pedidoId, uid) { yaCalificaron = it }
             }
         }
     }
 
-    fun cambiarEstado(nuevoEstado: String, onDone: () -> Unit = {}) {
+    fun cambiarEstado(nuevoEstado: String) {
         procesando = true
-        PedidoRepository.cambiarEstado(pedidoIdActual, nuevoEstado) {
-            procesando = false; onDone()
-        }
+        estadoEsperado = nuevoEstado
+        PedidoRepository.cambiarEstado(pedidoIdActual, nuevoEstado,
+            onError = { procesando = false; estadoEsperado = null }
+        )
     }
 
-    fun clienteConfirma(onDone: () -> Unit = {}) {
+    fun clienteConfirma() {
         procesando = true
+        estadoEsperado = "completado"
         PedidoRepository.clienteConfirmaEntrega(pedidoIdActual) {
-            procesando = false; onDone()
+            // El snapshot listener se encarga de resetear procesando
         }
     }
 
-    fun vendedorConfirma(onDone: () -> Unit = {}) {
+    fun vendedorConfirma() {
         procesando = true
+        estadoEsperado = "completado"
         PedidoRepository.vendedorConfirmaEntrega(pedidoIdActual) {
-            procesando = false; onDone()
+            // El snapshot listener se encarga de resetear procesando
         }
     }
 
