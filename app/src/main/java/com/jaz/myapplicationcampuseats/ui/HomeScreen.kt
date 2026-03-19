@@ -60,11 +60,14 @@ fun HomeScreen(
     var productos by remember { mutableStateOf<List<Producto>>(emptyList()) }
     var cargando by remember { mutableStateOf(true) }
 
-    LaunchedEffect(Unit) {
-        ProductoRepository.obtenerTodosDisponibles { lista ->
+    // Listener en tiempo real: se actualiza automáticamente cuando
+    // cualquier vendedor publique o modifique un producto
+    DisposableEffect(Unit) {
+        val listener = ProductoRepository.escucharProductosDisponibles { lista ->
             productos = lista
             cargando = false
         }
+        onDispose { listener.remove() }
     }
 
     val productosFiltrados = if (busqueda.isEmpty()) productos

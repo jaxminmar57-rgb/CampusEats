@@ -1,9 +1,14 @@
 package com.jaz.myapplicationcampuseats.ui
 
-import androidx.compose.foundation.Image
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -13,14 +18,18 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.jaz.myapplicationcampuseats.R
 import com.jaz.myapplicationcampuseats.model.Usuario
+import com.jaz.myapplicationcampuseats.repository.ImageRepository
 import com.jaz.myapplicationcampuseats.repository.UsuarioRepository
 
 @Composable
@@ -31,11 +40,23 @@ fun RegistroScreen(
     var nombre by remember { mutableStateOf("") }
     var correo by remember { mutableStateOf("") }
     var edad by remember { mutableStateOf("") }
+    var telefono by remember { mutableStateOf("") }
+    var sexo by remember { mutableStateOf("") }
+    var menuSexoAbierto by remember { mutableStateOf(false) }
     var password by remember { mutableStateOf("") }
     var confirmar by remember { mutableStateOf("") }
     var verPassword by remember { mutableStateOf(false) }
+
+    var fotoUri by remember { mutableStateOf<Uri?>(null) }
+    var subiendoFoto by remember { mutableStateOf(false) }
     var cargando by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
+
+    val opcionesSexo = listOf("Masculino", "Femenino", "Prefiero no decir")
+
+    val fotoLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri -> fotoUri = uri }
 
     Column(
         modifier = Modifier
@@ -55,27 +76,94 @@ fun RegistroScreen(
                 Icon(Icons.Default.ArrowBack, null, tint = Color.White)
             }
             Text(
-                text = "Crear cuenta",
+                "Crear cuenta",
                 color = Color.White,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold
             )
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
-        Image(
-            painter = painterResource(id = R.drawable.logo),
-            contentDescription = null,
-            modifier = Modifier.size(80.dp)
+        // ── Foto de perfil (obligatoria) ──
+        Text(
+            "Foto de perfil *",
+            color = Color.White,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.fillMaxWidth()
         )
+        Spacer(modifier = Modifier.height(8.dp))
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Box(
+            modifier = Modifier
+                .size(100.dp)
+                .clip(CircleShape)
+                .background(DarkSurface)
+                .border(
+                    width = 2.dp,
+                    color = if (fotoUri != null) GreenBtn else Color.Gray,
+                    shape = CircleShape
+                )
+                .clickable { fotoLauncher.launch("image/*") },
+            contentAlignment = Alignment.Center
+        ) {
+            if (fotoUri != null) {
+                AsyncImage(
+                    model = fotoUri,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        Icons.Default.AddAPhoto,
+                        null,
+                        tint = Color.Gray,
+                        modifier = Modifier.size(30.dp)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("Agregar", color = Color.Gray, fontSize = 11.sp)
+                }
+            }
+            // Indicador de subida
+            if (subiendoFoto) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.5f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        color = GreenBtn,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
+        }
 
+        if (fotoUri != null) {
+            Spacer(modifier = Modifier.height(6.dp))
+            TextButton(onClick = { fotoLauncher.launch("image/*") }) {
+                Text("Cambiar foto", color = GreenBtn, fontSize = 13.sp)
+            }
+        } else {
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                "Toca el círculo para seleccionar una foto",
+                color = Color.Gray,
+                fontSize = 12.sp
+            )
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // ── Campos de texto ──
         OutlinedTextField(
             value = nombre,
             onValueChange = { nombre = it; error = "" },
-            label = { Text("Nombre de usuario", color = Color.Gray) },
+            label = { Text("Nombre completo *", color = Color.Gray) },
             leadingIcon = { Icon(Icons.Default.Person, null, tint = Color.Gray) },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
@@ -88,7 +176,7 @@ fun RegistroScreen(
         OutlinedTextField(
             value = correo,
             onValueChange = { correo = it; error = "" },
-            label = { Text("Correo electrónico", color = Color.Gray) },
+            label = { Text("Correo electrónico *", color = Color.Gray) },
             leadingIcon = { Icon(Icons.Default.Email, null, tint = Color.Gray) },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
@@ -101,8 +189,12 @@ fun RegistroScreen(
 
         OutlinedTextField(
             value = edad,
-            onValueChange = { if (it.length <= 2 && it.all { c -> c.isDigit() }) { edad = it; error = "" } },
-            label = { Text("Edad", color = Color.Gray) },
+            onValueChange = {
+                if (it.length <= 2 && it.all { c -> c.isDigit() }) {
+                    edad = it; error = ""
+                }
+            },
+            label = { Text("Edad *", color = Color.Gray) },
             leadingIcon = { Icon(Icons.Default.CalendarToday, null, tint = Color.Gray) },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
@@ -113,10 +205,64 @@ fun RegistroScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        // Sexo (dropdown)
+        Box {
+            OutlinedTextField(
+                value = sexo,
+                onValueChange = {},
+                label = { Text("Sexo *", color = Color.Gray) },
+                leadingIcon = { Icon(Icons.Default.People, null, tint = Color.Gray) },
+                trailingIcon = {
+                    IconButton(onClick = { menuSexoAbierto = true }) {
+                        Icon(Icons.Default.ArrowDropDown, null, tint = Color.Gray)
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = camposColores(),
+                readOnly = true,
+                singleLine = true,
+                placeholder = { Text("Selecciona una opción", color = Color.Gray) }
+            )
+            DropdownMenu(
+                expanded = menuSexoAbierto,
+                onDismissRequest = { menuSexoAbierto = false },
+                modifier = Modifier.background(DarkSurface)
+            ) {
+                opcionesSexo.forEach { opcion ->
+                    DropdownMenuItem(
+                        text = { Text(opcion, color = Color.White) },
+                        onClick = { sexo = opcion; menuSexoAbierto = false; error = "" }
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Teléfono (opcional)
+        OutlinedTextField(
+            value = telefono,
+            onValueChange = {
+                if (it.length <= 15 && it.all { c -> c.isDigit() || c == '+' }) {
+                    telefono = it
+                }
+            },
+            label = { Text("Teléfono (opcional)", color = Color.Gray) },
+            leadingIcon = { Icon(Icons.Default.Phone, null, tint = Color.Gray) },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+            colors = camposColores(),
+            singleLine = true
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
         OutlinedTextField(
             value = password,
             onValueChange = { password = it; error = "" },
-            label = { Text("Contraseña", color = Color.Gray) },
+            label = { Text("Contraseña *", color = Color.Gray) },
             leadingIcon = { Icon(Icons.Default.Lock, null, tint = Color.Gray) },
             trailingIcon = {
                 IconButton(onClick = { verPassword = !verPassword }) {
@@ -126,7 +272,8 @@ fun RegistroScreen(
                     )
                 }
             },
-            visualTransformation = if (verPassword) VisualTransformation.None else PasswordVisualTransformation(),
+            visualTransformation = if (verPassword) VisualTransformation.None
+                                   else PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -139,7 +286,7 @@ fun RegistroScreen(
         OutlinedTextField(
             value = confirmar,
             onValueChange = { confirmar = it; error = "" },
-            label = { Text("Confirmar contraseña", color = Color.Gray) },
+            label = { Text("Confirmar contraseña *", color = Color.Gray) },
             leadingIcon = { Icon(Icons.Default.Lock, null, tint = Color.Gray) },
             visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth(),
@@ -165,9 +312,14 @@ fun RegistroScreen(
 
         Button(
             onClick = {
+                // Validaciones
                 when {
+                    fotoUri == null ->
+                        error = "La foto de perfil es obligatoria"
                     nombre.isBlank() || correo.isBlank() || edad.isBlank() || password.isBlank() ->
-                        error = "Completa todos los campos"
+                        error = "Completa todos los campos obligatorios (*)"
+                    sexo.isBlank() ->
+                        error = "Selecciona tu sexo"
                     password.length < 6 ->
                         error = "La contraseña debe tener al menos 6 caracteres"
                     password != confirmar ->
@@ -176,34 +328,101 @@ fun RegistroScreen(
                         error = "Debes tener al menos 14 años"
                     else -> {
                         cargando = true
-                        UsuarioRepository.registrar(
-                            correo = correo.trim(),
-                            password = password,
-                            nombre = nombre.trim(),
-                            edad = edad,
-                            onSuccess = { usuario ->
-                                cargando = false
-                                onEntrar(usuario)
-                            },
-                            onError = { msg ->
-                                cargando = false
-                                error = msg
+                        subiendoFoto = true
+                        error = ""
+
+                        // 1. Primero crear cuenta en Auth para tener el UID
+                        com.google.firebase.auth.FirebaseAuth.getInstance()
+                            .createUserWithEmailAndPassword(correo.trim(), password)
+                            .addOnSuccessListener { authResult ->
+                                val uid = authResult.user?.uid ?: run {
+                                    cargando = false
+                                    subiendoFoto = false
+                                    error = "Error al crear cuenta"
+                                    return@addOnSuccessListener
+                                }
+
+                                // 2. Subir foto con el UID real
+                                ImageRepository.subirFotoPerfil(
+                                    uri = fotoUri!!,
+                                    userId = uid,
+                                    onSuccess = { fotoUrl ->
+                                        subiendoFoto = false
+
+                                        // 3. Guardar perfil en Firestore
+                                        val usuario = Usuario(
+                                            uid = uid,
+                                            nombre = nombre.trim(),
+                                            correo = correo.trim(),
+                                            edad = edad,
+                                            fotoPerfil = fotoUrl,
+                                            telefono = telefono.trim(),
+                                            sexo = sexo
+                                        )
+                                        com.google.firebase.firestore.FirebaseFirestore
+                                            .getInstance()
+                                            .collection("usuarios")
+                                            .document(uid)
+                                            .set(usuario)
+                                            .addOnSuccessListener {
+                                                cargando = false
+                                                onEntrar(usuario)
+                                            }
+                                            .addOnFailureListener { e ->
+                                                cargando = false
+                                                error = "Error al guardar perfil: ${e.message}"
+                                            }
+                                    },
+                                    onError = { e ->
+                                        subiendoFoto = false
+                                        cargando = false
+                                        error = "Error al subir foto: ${e.message}"
+                                    }
+                                )
                             }
-                        )
+                            .addOnFailureListener { e ->
+                                cargando = false
+                                subiendoFoto = false
+                                error = e.message ?: "Error al crear cuenta"
+                            }
                     }
                 }
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp),
+                .height(52.dp),
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(containerColor = GreenBtn),
-            enabled = !cargando
+            enabled = !cargando && !subiendoFoto
         ) {
-            if (cargando) {
-                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(22.dp))
-            } else {
-                Text("Crear cuenta", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            when {
+                subiendoFoto -> {
+                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(22.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Subiendo foto...")
+                }
+                cargando -> {
+                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(22.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Creando cuenta...")
+                }
+                else -> {
+                    Text("Crear cuenta", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("¿Ya tienes cuenta?", color = Color.Gray, fontSize = 14.sp)
+            TextButton(onClick = onVolver) {
+                Text(
+                    "Iniciar sesión",
+                    color = GreenBtn,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
 

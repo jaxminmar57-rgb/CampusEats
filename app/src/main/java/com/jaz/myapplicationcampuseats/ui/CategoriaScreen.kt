@@ -35,11 +35,13 @@ fun CategoriaScreen(
     var snackMessage by remember { mutableStateOf("") }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(categoria) {
-        ProductoRepository.obtenerProductosPorCategoria(categoria) { lista ->
+    // Listener en tiempo real por categoría
+    DisposableEffect(categoria) {
+        val listener = ProductoRepository.escucharProductosPorCategoria(categoria) { lista ->
             productos = lista
             cargando = false
         }
+        onDispose { listener.remove() }
     }
 
     LaunchedEffect(snackMessage) {

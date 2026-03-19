@@ -8,7 +8,6 @@ object UsuarioRepository {
 
     private val db = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
-
     private val usuariosRef = db.collection("usuarios")
 
     val currentUserId: String
@@ -19,6 +18,9 @@ object UsuarioRepository {
         password: String,
         nombre: String,
         edad: String,
+        fotoPerfil: String,
+        telefono: String = "",
+        sexo: String = "",
         onSuccess: (Usuario) -> Unit,
         onError: (String) -> Unit
     ) {
@@ -29,7 +31,10 @@ object UsuarioRepository {
                     uid = uid,
                     nombre = nombre,
                     correo = correo,
-                    edad = edad
+                    edad = edad,
+                    fotoPerfil = fotoPerfil,
+                    telefono = telefono,
+                    sexo = sexo
                 )
                 usuariosRef.document(uid).set(usuario)
                     .addOnSuccessListener { onSuccess(usuario) }
