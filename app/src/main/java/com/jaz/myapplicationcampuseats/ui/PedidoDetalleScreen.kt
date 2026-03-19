@@ -443,6 +443,9 @@ fun DialogoResena(
         text = {
             Column {
                 Text("¿Cómo fue tu experiencia?", color = Color.Gray, fontSize = 13.sp)
+                if (!esVendedor) {
+                    Text("Tu calificación se aplicará a cada platillo del pedido.", color = Color.Gray, fontSize = 11.sp)
+                }
                 Spacer(modifier = Modifier.height(12.dp))
                 Row {
                     (1..5).forEach { i ->
@@ -461,14 +464,27 @@ fun DialogoResena(
         confirmButton = {
             Button(onClick = {
                 enviando = true
-                ResenaRepository.enviarResena(
-                    resena = com.jaz.myapplicationcampuseats.model.Resena(
+                if (!esVendedor) {
+                    // Cliente califica al vendedor → reseña por cada producto
+                    val productoIds = pedido.items.mapNotNull { it["productoId"] as? String }
+                    ResenaRepository.enviarResenaPorProductos(
                         pedidoId = pedido.id, autorId = autorId, autorNombre = autorNombre,
                         destinatarioId = destinatarioId, rolDestinatario = rolDestinatario,
-                        estrellas = estrellas, comentario = comentario),
-                    onSuccess = { enviando = false; onEnviado() },
-                    onError = { enviando = false }
-                )
+                        productoIds = productoIds, estrellas = estrellas, comentario = comentario,
+                        onSuccess = { enviando = false; onEnviado() },
+                        onError = { enviando = false }
+                    )
+                } else {
+                    // Vendedor califica al comprador → reseña directa
+                    ResenaRepository.enviarResena(
+                        resena = com.jaz.myapplicationcampuseats.model.Resena(
+                            pedidoId = pedido.id, autorId = autorId, autorNombre = autorNombre,
+                            destinatarioId = destinatarioId, rolDestinatario = rolDestinatario,
+                            estrellas = estrellas, comentario = comentario),
+                        onSuccess = { enviando = false; onEnviado() },
+                        onError = { enviando = false }
+                    )
+                }
             }, colors = ButtonDefaults.buttonColors(containerColor = GreenBtn), enabled = !enviando) {
                 Text("Enviar")
             }

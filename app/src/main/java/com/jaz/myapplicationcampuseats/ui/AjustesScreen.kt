@@ -45,6 +45,10 @@ fun AjustesScreen(
 
     // Vendedor
     var preferenciaEntrega by remember { mutableStateOf(usuario?.preferenciaEntrega ?: "cliente_recoge") }
+    var horarioInicio by remember { mutableStateOf(usuario?.horarioInicio ?: "09:00") }
+    var horarioFin by remember { mutableStateOf(usuario?.horarioFin ?: "18:00") }
+    val todosLosDias = listOf("Lun","Mar","Mié","Jue","Vie","Sáb","Dom")
+    var diasTrabajo by remember { mutableStateOf(usuario?.diasTrabajo ?: listOf("Lun","Mar","Mié","Jue","Vie")) }
     var ubicacionDescripcion by remember { mutableStateOf(usuario?.ubicacionDescripcion ?: "") }
 
     var guardando by remember { mutableStateOf(false) }
@@ -280,6 +284,59 @@ fun AjustesScreen(
 
         Spacer(modifier = Modifier.height(14.dp))
 
+        // ── Horario de trabajo ──
+        AjustesSectionCard {
+            Text("🕐 Horario de trabajo", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text("Los clientes verán cuándo sueles vender", color = Color.Gray, fontSize = 12.sp)
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Desde", color = Color.Gray, fontSize = 12.sp)
+                    OutlinedTextField(
+                        value = horarioInicio, onValueChange = { horarioInicio = it; guardado = false },
+                        placeholder = { Text("09:00", color = Color.Gray) },
+                        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp),
+                        colors = camposColores(), singleLine = true
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Hasta", color = Color.Gray, fontSize = 12.sp)
+                    OutlinedTextField(
+                        value = horarioFin, onValueChange = { horarioFin = it; guardado = false },
+                        placeholder = { Text("18:00", color = Color.Gray) },
+                        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp),
+                        colors = camposColores(), singleLine = true
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Text("Días que trabajas", color = Color.Gray, fontSize = 12.sp)
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                todosLosDias.forEach { dia ->
+                    val seleccionado = dia in diasTrabajo
+                    FilterChip(
+                        selected = seleccionado,
+                        onClick = {
+                            diasTrabajo = if (seleccionado) diasTrabajo - dia else diasTrabajo + dia
+                            guardado = false
+                        },
+                        label = { Text(dia, fontSize = 11.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = GreenBtn,
+                            selectedLabelColor = Color.White
+                        ),
+                        modifier = Modifier.height(32.dp)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
         // ── Guardar cambios ──
         Card(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -305,7 +362,10 @@ fun AjustesScreen(
                             "telefono" to telefono.trim(),
                             "sexo" to sexo,
                             "preferenciaEntrega" to preferenciaEntrega,
-                            "ubicacionDescripcion" to ubicacionDescripcion.trim()
+                            "ubicacionDescripcion" to ubicacionDescripcion.trim(),
+                            "horarioInicio" to horarioInicio.trim(),
+                            "horarioFin" to horarioFin.trim(),
+                            "diasTrabajo" to diasTrabajo
                         )
                         UsuarioRepository.actualizarPerfil(uid, campos,
                             onSuccess = {
@@ -315,7 +375,10 @@ fun AjustesScreen(
                                     telefono = telefono.trim(),
                                     sexo = sexo,
                                     preferenciaEntrega = preferenciaEntrega,
-                                    ubicacionDescripcion = ubicacionDescripcion.trim()
+                                    ubicacionDescripcion = ubicacionDescripcion.trim(),
+                                    horarioInicio = horarioInicio.trim(),
+                                    horarioFin = horarioFin.trim(),
+                                    diasTrabajo = diasTrabajo
                                 )
                                 actualizado?.let { onUsuarioActualizado(it) }
                             },

@@ -101,17 +101,25 @@ fun HomeScreen(
     val carritoCount    = vm.carritoCount
     val notifNoLeidas   = vm.notifNoLeidas
     val mensajesNuevosTotal = vm.mensajesNuevosTotal
+    val vendedoresAbiertos  = vm.vendedoresAbiertos
 
     // ── Datos derivados ────────────────────────────────────────────────────────
-    val categoriasConProductos = remember(productos) {
-        val cats = productos.map { it.categoria }.toSet()
+    // Solo mostrar productos de vendedores con negocio abierto
+    val productosVisibles = remember(productos, vendedoresAbiertos) {
+        productos.filter { it.vendedorId in vendedoresAbiertos }
+    }
+    val categoriasConProductos = remember(productosVisibles) {
+        val cats = productosVisibles.map { it.categoria }.toSet()
         todasCategorias.filter { (nombre, _) -> nombre in cats }
     }
-    val populares = remember(productos) {
-        productos.sortedByDescending { it.rating * (it.numResenas + 1) }.take(6)
+    // Populares: mejor rating + más vendidos (score compuesto)
+    val populares = remember(productosVisibles) {
+        productosVisibles
+            .sortedByDescending { it.rating * (it.numResenas + 1) + (it.ventasTotales * 0.5) }
+            .take(8)
     }
-    val productosFiltrados = if (busqueda.isEmpty()) productos
-    else productos.filter {
+    val productosFiltrados = if (busqueda.isEmpty()) productosVisibles
+    else productosVisibles.filter {
         coincideFuzzy(it.nombre, busqueda) ||
         coincideFuzzy(it.categoria, busqueda) ||
         coincideFuzzy(it.nombreVendedor, busqueda) ||
@@ -255,6 +263,39 @@ fun HomeScreen(
                             color = if (ubicacion.isNullOrBlank()) Color.Gray else Color.White,
                             fontSize = 12.sp, maxLines = 1, modifier = Modifier.weight(1f))
                         Icon(Icons.Default.Edit, null, tint = Color.Gray, modifier = Modifier.size(14.dp))
+                    }
+                }
+
+                // Toggle "Abrir/Cerrar negocio" visible solo para vendedores
+                val esVendedorConProductos = remember(productos, usuario) {
+                    productos.any { it.vendedorId == usuario?.uid }
+                }
+                if (esVendedorConProductos) {
+                    val estaAbierto = usuario?.negocioAbierto == true
+                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (estaAbierto) GreenBtn.copy(alpha = 0.15f) else RedCancel.copy(alpha = 0.15f))
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(if (estaAbierto) "🟢" else "🔴", fontSize = 14.sp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                if (estaAbierto) "Negocio abierto" else "Negocio cerrado",
+                                color = if (estaAbierto) GreenBtn else RedCancel,
+                                fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Switch(
+                            checked = estaAbierto,
+                            onCheckedChange = { vm.toggleNegocioAbierto(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = GreenBtn,
+                                uncheckedThumbColor = Color.White,
+                                uncheckedTrackColor = RedCancel.copy(alpha = 0.5f)),
+                            modifier = Modifier.height(28.dp)
+                        )
                     }
                 }
 
@@ -530,9 +571,10 @@ fun ProductoPopularCard(producto: Producto, onClick: () -> Unit) {
                     Box(modifier = Modifier.fillMaxWidth().height(100.dp).background(DarkSurface2, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
                         contentAlignment = Alignment.Center) { Text("🍽️", fontSize = 32.sp) }
                 }
-                Surface(modifier = Modifier.align(Alignment.TopEnd).padding(6.dp), shape = RoundedCornerShape(8.dp), color = Color.Black.copy(alpha = 0.7f)) {
-                    val ratingText = if (producto.rating > 0) String.format("%.1f", producto.rating) else "-"
-                    Text("⭐ $ratingText", color = Color.White, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+                // Rating badge overlay
+                Surface(modifier = Modifier.align(Alignment.TopEnd).padding(6.dp), shape = RoundedCornerShape(8.dp), color = Color.Black.copy(alpha = 0.75f)) {
+                    val r = if (producto.rating > 0) String.format("%.1f", producto.rating) else "-"
+                    Text("⭐ $r", color = Color.White, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
                 }
             }
             Column(modifier = Modifier.padding(10.dp)) {
@@ -545,7 +587,13 @@ fun ProductoPopularCard(producto: Producto, onClick: () -> Unit) {
                             maxLines = 1, modifier = Modifier.weight(1f, fill = false).basicMarquee())
                     }
                 }
-                Text("\$${String.format("%.0f", producto.precio)}", color = GreenBtn, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("\$${String.format("%.0f", producto.precio)}", color = GreenBtn, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    if (producto.preferenciaEntregaVendedor.isNotEmpty()) {
+                        Text(textoEntregaCorto(producto.preferenciaEntregaVendedor), color = Color.Gray, fontSize = 9.sp)
+                    }
+                }
             }
         }
     }
@@ -556,12 +604,19 @@ fun ProductoMiniCard(producto: Producto, modifier: Modifier = Modifier, onClick:
     Card(modifier = modifier.padding(vertical = 6.dp).clickable { onClick() }, shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = DarkSurface)) {
         Column {
-            if (producto.imagenUrl.isNotEmpty()) {
-                AsyncImage(model = producto.imagenUrl, contentDescription = producto.nombre,
-                    modifier = Modifier.fillMaxWidth().height(100.dp).clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)), contentScale = ContentScale.Crop)
-            } else {
-                Box(modifier = Modifier.fillMaxWidth().height(100.dp).background(DarkSurface2, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
-                    contentAlignment = Alignment.Center) { Text("🍽️", fontSize = 36.sp) }
+            Box {
+                if (producto.imagenUrl.isNotEmpty()) {
+                    AsyncImage(model = producto.imagenUrl, contentDescription = producto.nombre,
+                        modifier = Modifier.fillMaxWidth().height(100.dp).clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)), contentScale = ContentScale.Crop)
+                } else {
+                    Box(modifier = Modifier.fillMaxWidth().height(100.dp).background(DarkSurface2, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
+                        contentAlignment = Alignment.Center) { Text("🍽️", fontSize = 36.sp) }
+                }
+                // Rating badge overlay
+                Surface(modifier = Modifier.align(Alignment.TopEnd).padding(6.dp), shape = RoundedCornerShape(8.dp), color = Color.Black.copy(alpha = 0.75f)) {
+                    val r = if (producto.rating > 0) String.format("%.1f", producto.rating) else "-"
+                    Text("⭐ $r", color = Color.White, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+                }
             }
             Column(modifier = Modifier.padding(10.dp)) {
                 Text(producto.nombre, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -573,24 +628,21 @@ fun ProductoMiniCard(producto: Producto, modifier: Modifier = Modifier, onClick:
                             maxLines = 1, modifier = Modifier.basicMarquee())
                     }
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
+                if (producto.mostrarCantidad && producto.cantidadDisponible >= 0) {
+                    Text(
+                        if (producto.cantidadDisponible == 0) "Agotado" else "${producto.cantidadDisponible} disp.",
+                        color = if (producto.cantidadDisponible == 0) RedCancel else OrangeWarn,
+                        fontSize = 10.sp
+                    )
+                }
+                // Precio + tipo de entrega en la misma fila
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("⭐", fontSize = 11.sp)
-                        val rText = if (producto.rating > 0) String.format("%.1f", producto.rating) else "-"
-                        Text(" $rText", color = Color.Gray, fontSize = 11.sp)
-                    }
-                    if (producto.mostrarCantidad && producto.cantidadDisponible >= 0) {
-                        Text(
-                            if (producto.cantidadDisponible == 0) "Agotado" else "${producto.cantidadDisponible} disp.",
-                            color = if (producto.cantidadDisponible == 0) RedCancel else OrangeWarn,
-                            fontSize = 10.sp
-                        )
+                    Text("\$${String.format("%.0f", producto.precio)}", color = GreenBtn, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    if (producto.preferenciaEntregaVendedor.isNotEmpty()) {
+                        Text(textoEntregaCorto(producto.preferenciaEntregaVendedor), color = Color.Gray, fontSize = 10.sp)
                     }
                 }
-                Text("\$${String.format("%.0f", producto.precio)}", color = GreenBtn, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
         }
     }

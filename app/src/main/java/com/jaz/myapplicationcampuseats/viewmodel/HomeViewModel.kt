@@ -25,6 +25,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         private set
     var cargando by mutableStateOf(true)
         private set
+    // Set de vendedores abiertos (para filtrar en la UI)
+    var vendedoresAbiertos by mutableStateOf<Set<String>>(emptySet())
+        private set
     var pedidosActivosCliente by mutableStateOf<List<Pedido>>(emptyList())
         private set
     var pedidosActivosVendedor by mutableStateOf<List<Pedido>>(emptyList())
@@ -58,6 +61,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             productos = lista
             cargando = false
         }
+
+        // Escuchar qué vendedores tienen negocio abierto
+        listeners += FirebaseFirestore.getInstance().collection("usuarios")
+            .whereEqualTo("negocioAbierto", true)
+            .addSnapshotListener { snap, _ ->
+                vendedoresAbiertos = snap?.documents?.mapNotNull { it.id }?.toSet() ?: emptySet()
+            }
 
         if (uid.isEmpty()) return
 
@@ -108,6 +118,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun actualizarUbicacion(descripcion: String, onSuccess: () -> Unit = {}) {
         if (uid.isEmpty()) return
         UsuarioRepository.actualizarUbicacion(uid, descripcion, onSuccess)
+    }
+
+    fun toggleNegocioAbierto(nuevoEstado: Boolean, onSuccess: () -> Unit = {}) {
+        if (uid.isEmpty()) return
+        FirebaseFirestore.getInstance().collection("usuarios").document(uid)
+            .update("negocioAbierto", nuevoEstado)
+            .addOnSuccessListener { onSuccess() }
     }
 
     // ── Limpieza ──────────────────────────────────────────────────────────────

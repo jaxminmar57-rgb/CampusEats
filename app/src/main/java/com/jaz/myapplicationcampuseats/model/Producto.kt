@@ -12,10 +12,11 @@ data class Producto(
     val nombreVendedor: String = "",
     val rating: Double = 0.0,
     val numResenas: Int = 0,
+    val ventasTotales: Int = 0,       // cuántas veces se ha vendido
     val disponible: Boolean = true,
     val fechaPublicacion: Long = System.currentTimeMillis(),
-    // Stock
-    val cantidadDisponible: Int = -1,    // -1 = sin límite
-    val mostrarCantidad: Boolean = false,  // si true, clientes ven cuántas quedan
-    val ubicacionVendedor: String = ""     // ubicación del vendedor al publicar
+    val cantidadDisponible: Int = -1,
+    val mostrarCantidad: Boolean = false,
+    val ubicacionVendedor: String = "",
+    val preferenciaEntregaVendedor: String = ""
 )

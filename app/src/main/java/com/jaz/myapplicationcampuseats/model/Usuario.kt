@@ -7,9 +7,8 @@ data class Usuario(
     val edad: String = "",
     val fotoPerfil: String = "",
 
-    // Campos nuevos de perfil
-    val telefono: String = "",          // opcional
-    val sexo: String = "",              // "Masculino", "Femenino", "Prefiero no decir"
+    val telefono: String = "",
+    val sexo: String = "",
 
     // Ratings
     val ratingComprador: Double = 0.0,
@@ -20,13 +19,19 @@ data class Usuario(
     // Preferencia de entrega del vendedor
     val preferenciaEntrega: String = "cliente_recoge",
 
-    // Ubicación del vendedor (opcional)
+    // Ubicación del vendedor
     val ubicacionLat: Double = 0.0,
     val ubicacionLng: Double = 0.0,
     val ubicacionDescripcion: String = "",
 
     val pedidosComoComprador: Int = 0,
     val pedidosComoVendedor: Int = 0,
+
+    // Horario y disponibilidad del vendedor
+    val horarioInicio: String = "09:00",
+    val horarioFin: String = "18:00",
+    val diasTrabajo: List<String> = listOf("Lun","Mar","Mié","Jue","Vie"),
+    val negocioAbierto: Boolean = false,  // toggle diario
 
     val fechaRegistro: Long = System.currentTimeMillis()
 )

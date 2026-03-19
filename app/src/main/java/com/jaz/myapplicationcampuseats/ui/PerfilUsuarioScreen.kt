@@ -165,6 +165,29 @@ fun PerfilUsuarioScreen(
                 }
             }
 
+            // Horario de trabajo (si es vendedor con productos)
+            if (u.horarioInicio.isNotEmpty() || u.diasTrabajo.isNotEmpty()) {
+                item {
+                    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = DarkSurface)) {
+                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("🕐", fontSize = 18.sp)
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text("${u.horarioInicio} — ${u.horarioFin}", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                Text(u.diasTrabajo.joinToString(", "), color = Color.Gray, fontSize = 12.sp)
+                                if (u.negocioAbierto) {
+                                    Text("🟢 Abierto ahora", color = GreenBtn, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                } else {
+                                    Text("🔴 Cerrado", color = RedCancel, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // Tabs Vendedor / Comprador
             item {
                 TabRow(

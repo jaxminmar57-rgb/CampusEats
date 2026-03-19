@@ -40,6 +40,7 @@ fun PublicarScreen(
     userId: String,
     nombreVendedor: String,
     ubicacionVendedor: String = "",
+    preferenciaEntregaVendedor: String = "",
     onVolver: () -> Unit,
     productoExistente: Producto? = null   // null = nuevo, not null = edición
 ) {
@@ -239,7 +240,8 @@ fun PublicarScreen(
                                     "ingredientes" to ingredientes.trim(), "precio" to precio.toDouble(),
                                     "categoria" to categoriaSeleccionada, "cantidadDisponible" to cantidad,
                                     "mostrarCantidad" to (mostrarCantidad && cantidad >= 0),
-                                    "ubicacionVendedor" to ubicacionVendedor
+                                    "ubicacionVendedor" to ubicacionVendedor,
+                                    "preferenciaEntregaVendedor" to preferenciaEntregaVendedor
                                 )
                                 fun guardarEdicion(url: String) {
                                     if (url.isNotEmpty()) campos["imagenUrl"] = url
@@ -261,7 +263,7 @@ fun PublicarScreen(
                                             ingredientes = ingredientes.trim(), precio = precio.toDouble(), imagenUrl = url,
                                             categoria = categoriaSeleccionada, vendedorId = userId, nombreVendedor = nombreVendedor,
                                             disponible = true, cantidadDisponible = cantidad, mostrarCantidad = mostrarCantidad && cantidad >= 0,
-                                            ubicacionVendedor = ubicacionVendedor),
+                                            ubicacionVendedor = ubicacionVendedor, preferenciaEntregaVendedor = preferenciaEntregaVendedor),
                                         onSuccess = { publicando = false; publicado = true },
                                         onError = { publicando = false; error = "Error: ${it.message}" })
                                 }

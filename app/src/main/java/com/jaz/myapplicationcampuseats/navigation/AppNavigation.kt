@@ -290,6 +290,7 @@ fun AppNavigation(
                 userId = usuarioActual?.uid ?: "",
                 nombreVendedor = usuarioActual?.nombre ?: "",
                 ubicacionVendedor = usuarioActual?.ubicacionDescripcion ?: "",
+                preferenciaEntregaVendedor = usuarioActual?.preferenciaEntrega ?: "",
                 onVolver = { navController.popBackStackSafe() }
             )
         }
@@ -358,6 +359,7 @@ fun AppNavigation(
                     userId = usuarioActual?.uid ?: "",
                     nombreVendedor = usuarioActual?.nombre ?: "",
                     ubicacionVendedor = usuarioActual?.ubicacionDescripcion ?: "",
+                preferenciaEntregaVendedor = usuarioActual?.preferenciaEntrega ?: "",
                     onVolver = { navController.popBackStackSafe() },
                     productoExistente = productoEditar
                 )

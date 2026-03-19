@@ -96,6 +96,10 @@ object ProductoRepository {
             val productoId = item["productoId"] as? String ?: return@forEach
             val cantidad = (item["cantidad"] as? Long)?.toInt() ?: 1
             ajustarStock(productoId, -cantidad)
+            // Incrementar ventas totales
+            productosRef.document(productoId).update(
+                "ventasTotales", com.google.firebase.firestore.FieldValue.increment(cantidad.toLong())
+            )
         }
     }
 }
