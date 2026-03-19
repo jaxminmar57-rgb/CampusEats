@@ -22,19 +22,19 @@ object PedidoRepository {
     ) {
         if (items.isEmpty()) { onError("El carrito está vacío"); return }
 
-        val vendedorId = items.first().vendedorId
+        val vendedorId    = items.first().vendedorId
         val nombreVendedor = items.first().nombreVendedor
-        val total = items.sumOf { it.precio * it.cantidad }
+        val total         = items.sumOf { it.precio * it.cantidad }
 
         val doc = pedidosRef.document()
 
         val itemsMapa = items.map { item ->
             mapOf(
                 "productoId" to item.productoId,
-                "nombre" to item.nombre,
-                "precio" to item.precio,
-                "cantidad" to item.cantidad,
-                "imagenUrl" to item.imagenUrl
+                "nombre"     to item.nombre,
+                "precio"     to item.precio,
+                "cantidad"   to item.cantidad,
+                "imagenUrl"  to item.imagenUrl
             )
         }
 
@@ -53,18 +53,20 @@ object PedidoRepository {
         )
 
         doc.set(pedido)
-            .addOnSuccessListener { onSuccess(doc.id) }
+            .addOnSuccessListener {
+                // Notificar al vendedor del nuevo pedido
+                FcmRepository.notificarNuevoPedido(
+                    vendedorUid  = vendedorId,
+                    clienteNombre = nombreCliente,
+                    pedidoId     = doc.id,
+                    total        = total
+                )
+                onSuccess(doc.id)
+            }
             .addOnFailureListener { onError(it.message ?: "Error al crear pedido") }
     }
 
-    /**
-     * Listener tiempo real para el CLIENTE.
-     * Sin orderBy para evitar requerir índice compuesto — ordenamos en memoria.
-     */
-    fun escucharPedidosCliente(
-        clienteId: String,
-        onUpdate: (List<Pedido>) -> Unit
-    ): ListenerRegistration {
+    fun escucharPedidosCliente(clienteId: String, onUpdate: (List<Pedido>) -> Unit): ListenerRegistration {
         return pedidosRef
             .whereEqualTo("clienteId", clienteId)
             .addSnapshotListener { snapshot, error ->
@@ -76,14 +78,7 @@ object PedidoRepository {
             }
     }
 
-    /**
-     * Listener tiempo real para el VENDEDOR.
-     * Sin orderBy — ordenamos en memoria.
-     */
-    fun escucharPedidosVendedor(
-        vendedorId: String,
-        onUpdate: (List<Pedido>) -> Unit
-    ): ListenerRegistration {
+    fun escucharPedidosVendedor(vendedorId: String, onUpdate: (List<Pedido>) -> Unit): ListenerRegistration {
         return pedidosRef
             .whereEqualTo("vendedorId", vendedorId)
             .addSnapshotListener { snapshot, error ->
@@ -95,11 +90,7 @@ object PedidoRepository {
             }
     }
 
-    /** Escucha un pedido específico en tiempo real. */
-    fun escucharPedido(
-        pedidoId: String,
-        onUpdate: (Pedido?) -> Unit
-    ): ListenerRegistration {
+    fun escucharPedido(pedidoId: String, onUpdate: (Pedido?) -> Unit): ListenerRegistration {
         return pedidosRef.document(pedidoId)
             .addSnapshotListener { snapshot, _ ->
                 onUpdate(snapshot?.toObject(Pedido::class.java))
@@ -114,13 +105,24 @@ object PedidoRepository {
     ) {
         pedidosRef.document(pedidoId)
             .update("estado", nuevoEstado)
-            .addOnSuccessListener { onSuccess() }
+            .addOnSuccessListener {
+                // Notificar al cliente del cambio de estado
+                pedidosRef.document(pedidoId).get().addOnSuccessListener { doc ->
+                    val pedido = doc.toObject(Pedido::class.java) ?: return@addOnSuccessListener
+                    FcmRepository.notificarCambioEstado(
+                        clienteUid    = pedido.clienteId,
+                        vendedorNombre = pedido.nombreVendedor,
+                        pedidoId      = pedidoId,
+                        nuevoEstado   = nuevoEstado
+                    )
+                }
+                onSuccess()
+            }
             .addOnFailureListener { onError(it.message ?: "Error") }
     }
 
     fun clienteConfirmaEntrega(pedidoId: String, onSuccess: () -> Unit = {}) {
-        pedidosRef.document(pedidoId)
-            .update("clienteConfirmoEntrega", true)
+        pedidosRef.document(pedidoId).update("clienteConfirmoEntrega", true)
             .addOnSuccessListener {
                 pedidosRef.document(pedidoId).get().addOnSuccessListener { doc ->
                     val vendedorConfirmo = doc.getBoolean("vendedorConfirmoEntrega") ?: false
@@ -131,8 +133,7 @@ object PedidoRepository {
     }
 
     fun vendedorConfirmaEntrega(pedidoId: String, onSuccess: () -> Unit = {}) {
-        pedidosRef.document(pedidoId)
-            .update("vendedorConfirmoEntrega", true)
+        pedidosRef.document(pedidoId).update("vendedorConfirmoEntrega", true)
             .addOnSuccessListener {
                 pedidosRef.document(pedidoId).get().addOnSuccessListener { doc ->
                     val clienteConfirmo = doc.getBoolean("clienteConfirmoEntrega") ?: false
@@ -142,13 +143,8 @@ object PedidoRepository {
             }
     }
 
-    fun obtenerPedidosUsuario(
-        userId: String,
-        onResult: (List<Pedido>) -> Unit
-    ) {
-        pedidosRef
-            .whereEqualTo("clienteId", userId)
-            .get()
+    fun obtenerPedidosUsuario(userId: String, onResult: (List<Pedido>) -> Unit) {
+        pedidosRef.whereEqualTo("clienteId", userId).get()
             .addOnSuccessListener { result ->
                 val lista = result.documents
                     .mapNotNull { it.toObject(Pedido::class.java) }

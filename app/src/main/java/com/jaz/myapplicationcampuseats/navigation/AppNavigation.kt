@@ -7,6 +7,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.jaz.myapplicationcampuseats.repository.UsuarioRepository
+import com.jaz.myapplicationcampuseats.repository.FcmRepository
 import com.jaz.myapplicationcampuseats.model.Usuario
 import com.jaz.myapplicationcampuseats.ui.*
 
@@ -27,15 +28,36 @@ object Routes {
     const val PUBLICAR = "publicar"
     const val MIS_PUBLICACIONES = "mis_publicaciones"
     const val CHATS = "chats"
+    const val TIENDA = "tienda/{vendedorId}"
+    const val PERFIL = "perfil/{uid}"
 
     fun categoria(cat: String) = "categoria/$cat"
     fun pedidoDetalle(pedidoId: String) = "pedido/$pedidoId"
     fun chat(pedidoId: String, otroNombre: String) = "chat/$pedidoId/$otroNombre"
+    fun tienda(vendedorId: String) = "tienda/$vendedorId"
+    fun perfil(uid: String) = "perfil/$uid"
 }
 
 @Composable
-fun AppNavigation() {
+fun AppNavigation(
+    deepLinkDestino: String? = null,
+    deepLinkPedidoId: String? = null,
+    deepLinkOtroNombre: String? = null
+) {
     val navController = rememberNavController()
+    // Navegar al destino del deep link (notificación)
+    LaunchedEffect(deepLinkDestino, deepLinkPedidoId) {
+        if (deepLinkPedidoId.isNullOrEmpty()) return@LaunchedEffect
+        when (deepLinkDestino) {
+            "pedido" -> navController.navigate(Routes.pedidoDetalle(deepLinkPedidoId))
+            "chat"   -> {
+                val otro = deepLinkOtroNombre ?: ""
+                navController.navigate(Routes.chat(deepLinkPedidoId, otro))
+            }
+            "historial" -> navController.navigate(Routes.HISTORIAL)
+        }
+    }
+
 
     // Usuario logueado en memoria (evita leer Firestore en cada pantalla)
     var usuarioActual by remember { mutableStateOf<Usuario?>(null) }
@@ -70,6 +92,7 @@ fun AppNavigation() {
                 onRegistrarme = { navController.navigate(Routes.REGISTRO) },
                 onEntrar = { usuario ->
                     usuarioActual = usuario
+                    FcmRepository.registrarTokenActual()
                     navController.navigate(Routes.HOME) {
                         popUpTo(Routes.LOGIN) { inclusive = true }
                     }
@@ -82,6 +105,7 @@ fun AppNavigation() {
                 onVolver = { navController.popBackStack() },
                 onEntrar = { usuario ->
                     usuarioActual = usuario
+                    FcmRepository.registrarTokenActual()
                     navController.navigate(Routes.HOME) {
                         popUpTo(Routes.REGISTRO) { inclusive = true }
                     }
@@ -108,7 +132,10 @@ fun AppNavigation() {
                 onPedidosVendedor = { navController.navigate(Routes.PEDIDOS_VENDEDOR) },
                 onAjustes = { navController.navigate(Routes.AJUSTES) },
                 onMisPublicaciones = { navController.navigate(Routes.MIS_PUBLICACIONES) },
-                onChats = { navController.navigate(Routes.CHATS) }
+                onChats = { navController.navigate(Routes.CHATS) },
+                onAbrirPedido = { pedidoId -> navController.navigate(Routes.pedidoDetalle(pedidoId)) },
+                onAbrirChat = { pedidoId, otroNombre -> navController.navigate(Routes.chat(pedidoId, otroNombre)) },
+                onVerTienda = { vendedorId -> navController.navigate(Routes.tienda(vendedorId)) }
             )
         }
 
@@ -120,7 +147,10 @@ fun AppNavigation() {
             CategoriaScreen(
                 categoria = categoria,
                 usuarioId = usuarioActual?.uid ?: "",
-                onVolver = { navController.popBackStack() }
+                onVolver = { navController.popBackStack() },
+                onVerTienda = { vendedorId ->
+                    navController.navigate(Routes.tienda(vendedorId))
+                }
             )
         }
 
@@ -156,9 +186,8 @@ fun AppNavigation() {
             PedidosVendedorScreen(
                 vendedorId = usuarioActual?.uid ?: "",
                 onVolver = { navController.popBackStack() },
-                onAbrirPedido = { pedidoId ->
-                    navController.navigate(Routes.pedidoDetalle(pedidoId))
-                }
+                onAbrirPedido = { pedidoId -> navController.navigate(Routes.pedidoDetalle(pedidoId)) },
+                onAbrirChat = { pedidoId, otroNombre -> navController.navigate(Routes.chat(pedidoId, otroNombre)) }
             )
         }
 
@@ -191,9 +220,8 @@ fun AppNavigation() {
             HistorialScreen(
                 userId = usuarioActual?.uid ?: "",
                 onVolver = { navController.popBackStack() },
-                onAbrirPedido = { pedidoId ->
-                    navController.navigate(Routes.pedidoDetalle(pedidoId))
-                }
+                onAbrirPedido = { pedidoId -> navController.navigate(Routes.pedidoDetalle(pedidoId)) },
+                onAbrirChat = { pedidoId, otroNombre -> navController.navigate(Routes.chat(pedidoId, otroNombre)) }
             )
         }
 
@@ -213,7 +241,16 @@ fun AppNavigation() {
         }
 
         composable(Routes.NOTIFICACIONES) {
-            NotificacionesScreen(onVolver = { navController.popBackStack() })
+            NotificacionesScreen(
+                userId = usuarioActual?.uid ?: "",
+                onVolver = { navController.popBackStack() },
+                onAbrirPedido = { pedidoId ->
+                    navController.navigate(Routes.pedidoDetalle(pedidoId))
+                },
+                onAbrirChat = { pedidoId, otroNombre ->
+                    navController.navigate(Routes.chat(pedidoId, otroNombre))
+                }
+            )
         }
 
         composable(Routes.PUBLICAR) {
@@ -238,6 +275,32 @@ fun AppNavigation() {
                 onAbrirChat = { pedidoId, otroNombre ->
                     navController.navigate(Routes.chat(pedidoId, otroNombre))
                 }
+            )
+        }
+
+        composable(
+            route = Routes.TIENDA,
+            arguments = listOf(navArgument("vendedorId") { type = NavType.StringType })
+        ) { backStack ->
+            val vendedorId = backStack.arguments?.getString("vendedorId") ?: ""
+            TiendaScreen(
+                vendedorId = vendedorId,
+                userId = usuarioActual?.uid ?: "",
+                onVolver = { navController.popBackStack() },
+                onVerPerfil = { uid -> navController.navigate(Routes.perfil(uid)) },
+                onCarrito = { navController.navigate(Routes.CARRITO) }
+            )
+        }
+
+        composable(
+            route = Routes.PERFIL,
+            arguments = listOf(navArgument("uid") { type = NavType.StringType })
+        ) { backStack ->
+            val uid = backStack.arguments?.getString("uid") ?: ""
+            PerfilUsuarioScreen(
+                uid = uid,
+                onVolver = { navController.popBackStack() },
+                onVerTienda = { vendedorId -> navController.navigate(Routes.tienda(vendedorId)) }
             )
         }
     }

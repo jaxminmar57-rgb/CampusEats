@@ -1,13 +1,16 @@
 package com.jaz.myapplicationcampuseats.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Store
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,14 +31,14 @@ import com.jaz.myapplicationcampuseats.repository.ProductoRepository
 fun CategoriaScreen(
     categoria: String,
     usuarioId: String,
-    onVolver: () -> Unit
+    onVolver: () -> Unit,
+    onVerTienda: ((vendedorId: String) -> Unit)? = null
 ) {
     var productos by remember { mutableStateOf<List<Producto>>(emptyList()) }
     var cargando by remember { mutableStateOf(true) }
     var snackMessage by remember { mutableStateOf("") }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // Listener en tiempo real por categoría
     DisposableEffect(categoria) {
         val listener = ProductoRepository.escucharProductosPorCategoria(categoria) { lista ->
             productos = lista
@@ -61,7 +64,6 @@ fun CategoriaScreen(
                 .padding(padding)
                 .background(DarkBg)
         ) {
-            // Header
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -80,42 +82,37 @@ fun CategoriaScreen(
             }
 
             when {
-                cargando -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = GreenBtn)
+                cargando -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = GreenBtn)
+                }
+                productos.isEmpty() -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("🍽️", fontSize = 52.sp)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text("No hay platillos en esta categoría", color = Color.White, fontSize = 15.sp)
                     }
                 }
-                productos.isEmpty() -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("🍽️", fontSize = 52.sp)
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text("No hay platillos en esta categoría", color = Color.White, fontSize = 15.sp)
-                        }
-                    }
-                }
-                else -> {
-                    LazyColumn(
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        items(productos) { producto ->
-                            ProductoCard(
-                                producto = producto,
-                                onAgregarAlCarrito = {
-                                    val item = ItemCarrito(
-                                        productoId = producto.id,
-                                        nombre = producto.nombre,
-                                        precio = producto.precio,
-                                        imagenUrl = producto.imagenUrl,
-                                        vendedorId = producto.vendedorId,
-                                        nombreVendedor = producto.nombreVendedor
-                                    )
-                                    CarritoRepository.agregarProducto(usuarioId, item)
-                                    snackMessage = "\"${producto.nombre}\" agregado al carrito"
-                                }
-                            )
-                        }
+                else -> LazyColumn(
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    items(productos) { producto ->
+                        ProductoCard(
+                            producto = producto,
+                            onAgregarAlCarrito = {
+                                val item = ItemCarrito(
+                                    productoId    = producto.id,
+                                    nombre        = producto.nombre,
+                                    precio        = producto.precio,
+                                    imagenUrl     = producto.imagenUrl,
+                                    vendedorId    = producto.vendedorId,
+                                    nombreVendedor = producto.nombreVendedor
+                                )
+                                CarritoRepository.agregarProducto(usuarioId, item)
+                                snackMessage = "\"${producto.nombre}\" agregado al carrito"
+                            },
+                            onVerTienda = onVerTienda?.let { cb -> { cb(producto.vendedorId) } }
+                        )
                     }
                 }
             }
@@ -126,7 +123,8 @@ fun CategoriaScreen(
 @Composable
 fun ProductoCard(
     producto: Producto,
-    onAgregarAlCarrito: () -> Unit
+    onAgregarAlCarrito: () -> Unit,
+    onVerTienda: (() -> Unit)? = null
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -134,6 +132,7 @@ fun ProductoCard(
         colors = CardDefaults.cardColors(containerColor = DarkSurface)
     ) {
         Column {
+            // Imagen
             if (producto.imagenUrl.isNotEmpty()) {
                 AsyncImage(
                     model = producto.imagenUrl,
@@ -161,12 +160,34 @@ fun ProductoCard(
                     verticalAlignment = Alignment.Top
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(producto.nombre, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                         Text(
-                            "Por ${producto.nombreVendedor}",
-                            color = GreenLight,
-                            fontSize = 12.sp
+                            producto.nombre,
+                            color = Color.White,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold
                         )
+                        // Vendedor clickeable → ir a tienda
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = if (onVerTienda != null)
+                                Modifier.clickable { onVerTienda() }
+                            else Modifier
+                        ) {
+                            Text(
+                                "Por ${producto.nombreVendedor}",
+                                color = GreenLight,
+                                fontSize = 12.sp
+                            )
+                            if (onVerTienda != null) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    Icons.Default.Store,
+                                    null,
+                                    tint = GreenLight,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            }
+                        }
                     }
                     Text(
                         "\$${String.format("%.0f", producto.precio)}",
@@ -205,13 +226,30 @@ fun ProductoCard(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                Button(
-                    onClick = onAgregarAlCarrito,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = GreenBtn)
-                ) {
-                    Text("Agregar al carrito", fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    // Botón ver tienda
+                    if (onVerTienda != null) {
+                        OutlinedButton(
+                            onClick = onVerTienda,
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.height(42.dp)
+                        ) {
+                            Icon(Icons.Default.Store, null, tint = GreenBtn, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Tienda", color = GreenBtn, fontSize = 13.sp)
+                        }
+                    }
+
+                    Button(
+                        onClick = onAgregarAlCarrito,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(42.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = GreenBtn)
+                    ) {
+                        Text("Agregar al carrito", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
                 }
             }
         }

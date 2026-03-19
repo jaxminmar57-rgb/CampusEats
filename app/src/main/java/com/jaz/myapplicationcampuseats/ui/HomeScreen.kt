@@ -1,6 +1,7 @@
 package com.jaz.myapplicationcampuseats.ui
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -18,6 +19,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -28,11 +31,13 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
 import com.jaz.myapplicationcampuseats.R
+import com.jaz.myapplicationcampuseats.model.Pedido
 import com.jaz.myapplicationcampuseats.model.Producto
 import com.jaz.myapplicationcampuseats.model.Usuario
+import com.jaz.myapplicationcampuseats.repository.PedidoRepository
 import com.jaz.myapplicationcampuseats.repository.ProductoRepository
 
-val categorias = listOf(
+val todasCategorias = listOf(
     Pair("Hamburguesas", R.drawable.hamburguesa),
     Pair("Pizza", R.drawable.pizza),
     Pair("Pastas", R.drawable.pastas),
@@ -56,20 +61,45 @@ fun HomeScreen(
     onPedidosVendedor: () -> Unit,
     onAjustes: () -> Unit,
     onMisPublicaciones: () -> Unit,
-    onChats: () -> Unit
+    onChats: () -> Unit,
+    onAbrirPedido: (String) -> Unit,
+    onAbrirChat: (pedidoId: String, otroNombre: String) -> Unit,
+    onVerTienda: (vendedorId: String) -> Unit
 ) {
     var busqueda by remember { mutableStateOf("") }
     var menuAbierto by remember { mutableStateOf(false) }
     var fabExpandido by remember { mutableStateOf(false) }
     var productos by remember { mutableStateOf<List<Producto>>(emptyList()) }
+    var pedidosActivos by remember { mutableStateOf<List<Pedido>>(emptyList()) }
     var cargando by remember { mutableStateOf(true) }
 
+    // Listener de productos en tiempo real
     DisposableEffect(Unit) {
         val listener = ProductoRepository.escucharProductosDisponibles { lista ->
             productos = lista
             cargando = false
         }
         onDispose { listener.remove() }
+    }
+
+    // Listener de pedidos activos del cliente
+    DisposableEffect(usuario?.uid) {
+        val uid = usuario?.uid ?: return@DisposableEffect onDispose {}
+        val listener = PedidoRepository.escucharPedidosCliente(uid) { lista ->
+            pedidosActivos = lista.filter { it.estado !in listOf("completado", "cancelado") }
+        }
+        onDispose { listener.remove() }
+    }
+
+    // Categorías con productos
+    val categoriasConProductos = remember(productos) {
+        val cats = productos.map { it.categoria }.toSet()
+        todasCategorias.filter { (nombre, _) -> nombre in cats }
+    }
+
+    // Productos populares (top 6 por rating * numResenas)
+    val populares = remember(productos) {
+        productos.sortedByDescending { it.rating * (it.numResenas + 1) }.take(6)
     }
 
     val productosFiltrados = if (busqueda.isEmpty()) productos
@@ -81,7 +111,7 @@ fun HomeScreen(
 
     Box(modifier = Modifier.fillMaxSize().background(DarkBg)) {
 
-        // ── Contenido principal (scroll) ──
+        // ── Contenido principal ──
         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
 
             // Barra superior
@@ -105,6 +135,30 @@ fun HomeScreen(
                     fontWeight = FontWeight.Bold
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Badge de pedidos activos
+                    if (pedidosActivos.isNotEmpty()) {
+                        Box {
+                            IconButton(onClick = onHistorial) {
+                                Icon(Icons.Default.Receipt, null, tint = Color.White, modifier = Modifier.size(26.dp))
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .align(Alignment.TopEnd)
+                                    .offset(x = (-4).dp, y = 4.dp)
+                                    .clip(CircleShape)
+                                    .background(RedCancel),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    "${pedidosActivos.size}",
+                                    color = Color.White,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
                     IconButton(onClick = onNotificaciones) {
                         Icon(Icons.Default.Notifications, null, tint = Color.White, modifier = Modifier.size(26.dp))
                     }
@@ -142,65 +196,129 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            if (busqueda.isEmpty()) {
-                // Carrusel banner
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(listOf("🌯 Burritos del día", "🍕 Pizza especial", "🍔 Combo hamburguesa")) { texto ->
+            // ── Pedidos activos ──
+            AnimatedVisibility(
+                visible = pedidosActivos.isNotEmpty() && busqueda.isEmpty(),
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Column {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Punto pulsante
+                        val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+                        val pulseScale by infiniteTransition.animateFloat(
+                            initialValue = 0.8f, targetValue = 1.2f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(800, easing = FastOutSlowInEasing),
+                                repeatMode = RepeatMode.Reverse
+                            ), label = "pulse"
+                        )
                         Box(
                             modifier = Modifier
-                                .size(width = 220.dp, height = 110.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(DarkCard),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(texto, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                .size(10.dp)
+                                .scale(pulseScale)
+                                .clip(CircleShape)
+                                .background(GreenBtn)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Mis pedidos activos", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.weight(1f))
+                        TextButton(onClick = onHistorial) {
+                            Text("Ver todos", color = GreenBtn, fontSize = 12.sp)
                         }
                     }
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // Categorías
-                Text(
-                    "Categorías",
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(categorias) { (nombre, imagen) ->
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.clickable { onCategoria(nombre) }
-                        ) {
-                            Box(
-                                modifier = Modifier.size(62.dp).clip(CircleShape).background(DarkSurface),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Image(
-                                    painter = painterResource(id = imagen),
-                                    contentDescription = nombre,
-                                    modifier = Modifier.size(46.dp).clip(CircleShape),
-                                    contentScale = ContentScale.Crop
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(nombre, color = Color.White, fontSize = 11.sp)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(pedidosActivos) { pedido ->
+                            PedidoActivoCard(
+                                pedido = pedido,
+                                onClick = { onAbrirPedido(pedido.id) },
+                                onChat = {
+                                    onAbrirChat(pedido.id, pedido.nombreVendedor)
+                                }
+                            )
                         }
                     }
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
-                Spacer(modifier = Modifier.height(20.dp))
             }
 
-            // Título productos
+            if (busqueda.isEmpty()) {
+                // ── Categorías dinámicas ──
+                if (categoriasConProductos.isNotEmpty()) {
+                    Text(
+                        "Categorías",
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(categoriasConProductos) { (nombre, imagen) ->
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.clickable { onCategoria(nombre) }
+                            ) {
+                                Box(
+                                    modifier = Modifier.size(62.dp).clip(CircleShape).background(DarkSurface),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Image(
+                                        painter = painterResource(id = imagen),
+                                        contentDescription = nombre,
+                                        modifier = Modifier.size(46.dp).clip(CircleShape),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(nombre, color = Color.White, fontSize = 11.sp)
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(20.dp))
+                }
+
+                // ── Populares ──
+                if (populares.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("🔥", fontSize = 18.sp)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Populares", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(populares) { producto ->
+                            ProductoPopularCard(
+                                producto = producto,
+                                onClick = { onVerTienda(producto.vendedorId) }
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(20.dp))
+                }
+            }
+
+            // ── Todos los productos ──
             Text(
                 text = if (busqueda.isEmpty()) "Disponibles ahora"
                        else "Resultados para \"$busqueda\"",
@@ -229,10 +347,6 @@ fun HomeScreen(
                             else "Sin resultados para \"$busqueda\"",
                             color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold
                         )
-                        if (busqueda.isEmpty()) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("¡Sé el primero en publicar algo! 🍽️", color = Color.Gray, fontSize = 14.sp)
-                        }
                     }
                 }
                 else -> {
@@ -246,7 +360,7 @@ fun HomeScreen(
                                     ProductoMiniCard(
                                         producto = producto,
                                         modifier = Modifier.weight(1f),
-                                        onClick = { onCategoria(producto.categoria) }
+                                        onClick = { onVerTienda(producto.vendedorId) }
                                     )
                                 }
                                 if (fila.size == 1) Spacer(modifier = Modifier.weight(1f))
@@ -260,7 +374,6 @@ fun HomeScreen(
         }
 
         // ── Speed Dial FAB ──
-        // Overlay para cerrar el speed dial al tocar fuera
         if (fabExpandido) {
             Box(
                 modifier = Modifier
@@ -279,7 +392,6 @@ fun HomeScreen(
             horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Opciones del speed dial (aparecen al expandir)
             AnimatedVisibility(
                 visible = fabExpandido,
                 enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
@@ -287,22 +399,26 @@ fun HomeScreen(
             ) {
                 Column(
                     horizontalAlignment = Alignment.End,
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    SpeedDialOpcion(
-                        icono = Icons.Default.ShoppingCart,
-                        etiqueta = "Ver carrito",
-                        onClick = { fabExpandido = false; onCarrito() }
-                    )
-                    SpeedDialOpcion(
-                        icono = Icons.Default.AddBox,
-                        etiqueta = "Publicar platillo",
-                        onClick = { fabExpandido = false; onPublicar() }
-                    )
+                    SpeedDialOpcion(Icons.Default.Notifications, "Notificaciones") {
+                        fabExpandido = false; onNotificaciones()
+                    }
+                    SpeedDialOpcion(Icons.Default.Receipt, "Mis pedidos") {
+                        fabExpandido = false; onHistorial()
+                    }
+                    SpeedDialOpcion(Icons.Default.ChatBubble, "Mensajes") {
+                        fabExpandido = false; onChats()
+                    }
+                    SpeedDialOpcion(Icons.Default.ShoppingCart, "Ver carrito") {
+                        fabExpandido = false; onCarrito()
+                    }
+                    SpeedDialOpcion(Icons.Default.AddBox, "Publicar platillo") {
+                        fabExpandido = false; onPublicar()
+                    }
                 }
             }
 
-            // Botón principal del FAB
             FloatingActionButton(
                 onClick = { fabExpandido = !fabExpandido },
                 containerColor = GreenBtn,
@@ -319,10 +435,7 @@ fun HomeScreen(
         }
 
         // ── Menú lateral ──
-        // El overlay y el panel son independientes con zIndex para que
-        // los toques en el panel no cierren el menú
         if (menuAbierto) {
-            // Overlay oscuro — solo cubre el área fuera del panel
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -330,21 +443,21 @@ fun HomeScreen(
                     .clickable { menuAbierto = false }
                     .zIndex(10f)
             )
-
-            // Panel del menú — zIndex mayor para estar encima del overlay
             Column(
                 modifier = Modifier
                     .fillMaxHeight()
                     .width(275.dp)
                     .align(Alignment.CenterStart)
-                    .background(Color(0xFF1A3320))
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(Color(0xFF1A3320), Color(0xFF0D1F17))
+                        )
+                    )
                     .padding(horizontal = 20.dp, vertical = 24.dp)
                     .zIndex(11f)
-                    .clickable(enabled = false) {} // bloquea que los toques pasen al overlay
+                    .clickable(enabled = false) {}
             ) {
                 Spacer(modifier = Modifier.height(32.dp))
-
-                // Avatar + nombre
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
@@ -366,16 +479,10 @@ fun HomeScreen(
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
-                        Text(
-                            usuario?.nombre ?: "",
-                            color = Color.White,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Text(usuario?.nombre ?: "", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                         Text(usuario?.correo ?: "", color = Color.Gray, fontSize = 12.sp)
                     }
                 }
-
                 Spacer(modifier = Modifier.height(20.dp))
                 HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
                 Spacer(modifier = Modifier.height(14.dp))
@@ -400,6 +507,7 @@ fun HomeScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 MenuOpcion(Icons.Default.ChatBubble, "Chats") { menuAbierto = false; onChats() }
+                MenuOpcion(Icons.Default.Notifications, "Notificaciones") { menuAbierto = false; onNotificaciones() }
                 MenuOpcion(Icons.Default.Person, "Mi cuenta") { menuAbierto = false; onCuenta() }
                 MenuOpcion(Icons.Default.Settings, "Ajustes") { menuAbierto = false; onAjustes() }
 
@@ -407,50 +515,185 @@ fun HomeScreen(
                 HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
                 Spacer(modifier = Modifier.height(12.dp))
                 MenuOpcion(Icons.Default.ExitToApp, "Cerrar sesión", tint = RedCancel) {
-                    menuAbierto = false
-                    onCerrarSesion()
+                    menuAbierto = false; onCerrarSesion()
                 }
             }
         }
     }
 }
 
+// ── Tarjeta de pedido activo en HomeScreen ──
 @Composable
-fun SpeedDialOpcion(
-    icono: ImageVector,
-    etiqueta: String,
-    onClick: () -> Unit
+fun PedidoActivoCard(
+    pedido: Pedido,
+    onClick: () -> Unit,
+    onChat: () -> Unit
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.End,
-        modifier = Modifier.clickable { onClick() }
+    val estadoInfo = estadoInfo(pedido.estado)
+    val tiempoTexto = tiempoTranscurrido(pedido.fecha)
+
+    Card(
+        modifier = Modifier
+            .width(220.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = estadoInfo.color.copy(alpha = 0.12f)
+        ),
+        border = CardDefaults.outlinedCardBorder().copy(
+            brush = androidx.compose.ui.graphics.SolidColor(estadoInfo.color.copy(alpha = 0.4f))
+        )
     ) {
-        // Etiqueta
-        Surface(
-            shape = RoundedCornerShape(8.dp),
-            color = Color(0xFF1A3320),
-            shadowElevation = 4.dp
-        ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            // Estado con color
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(estadoInfo.color)
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(estadoInfo.emoji, fontSize = 14.sp)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        estadoInfo.label,
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Text(tiempoTexto, color = Color.White.copy(alpha = 0.8f), fontSize = 10.sp)
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
             Text(
-                etiqueta,
+                "🏪 ${pedido.nombreVendedor}",
                 color = Color.White,
                 fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
             )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                "${pedido.items.size} producto${if (pedido.items.size != 1) "s" else ""} · \$${String.format("%.0f", pedido.total)}",
+                color = Color.Gray,
+                fontSize = 12.sp
+            )
+
+            // Primera item del pedido
+            val primerItem = pedido.items.firstOrNull()
+            val nombreItem = primerItem?.get("nombre") as? String ?: ""
+            if (nombreItem.isNotEmpty()) {
+                Text(nombreItem, color = Color.Gray, fontSize = 11.sp, maxLines = 1)
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Botón chat
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                IconButton(
+                    onClick = onChat,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(estadoInfo.color.copy(alpha = 0.3f))
+                ) {
+                    Icon(
+                        Icons.Default.ChatBubble,
+                        null,
+                        tint = estadoInfo.color,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
         }
-        Spacer(modifier = Modifier.width(8.dp))
-        // Mini FAB
-        FloatingActionButton(
-            onClick = onClick,
-            containerColor = DarkCard,
-            contentColor = GreenBtn,
-            shape = CircleShape,
-            modifier = Modifier.size(44.dp)
-        ) {
-            Icon(icono, contentDescription = etiqueta, modifier = Modifier.size(22.dp))
+    }
+}
+
+// ── Tarjeta de producto popular (horizontal) ──
+@Composable
+fun ProductoPopularCard(producto: Producto, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .width(160.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface)
+    ) {
+        Column {
+            Box {
+                if (producto.imagenUrl.isNotEmpty()) {
+                    AsyncImage(
+                        model = producto.imagenUrl,
+                        contentDescription = producto.nombre,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(100.dp)
+                            .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(100.dp)
+                            .background(DarkSurface2, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
+                        contentAlignment = Alignment.Center
+                    ) { Text("🍽️", fontSize = 32.sp) }
+                }
+                // Badge rating
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color.Black.copy(alpha = 0.7f)
+                ) {
+                    Text(
+                        "⭐ ${String.format("%.1f", producto.rating)}",
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                    )
+                }
+            }
+            Column(modifier = Modifier.padding(10.dp)) {
+                Text(producto.nombre, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text(producto.nombreVendedor, color = Color.Gray, fontSize = 10.sp, maxLines = 1)
+                Text("\$${String.format("%.0f", producto.precio)}", color = GreenBtn, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            }
         }
+    }
+}
+
+// ── Helpers ──
+
+data class EstadoInfo(val color: Color, val emoji: String, val label: String)
+
+fun estadoInfo(estado: String): EstadoInfo = when (estado) {
+    "pendiente"  -> EstadoInfo(OrangeWarn, "⏳", "Pendiente")
+    "en_espera"  -> EstadoInfo(OrangeWarn, "🕐", "En espera")
+    "aceptado"   -> EstadoInfo(GreenBtn,   "✅", "Aceptado")
+    "listo"      -> EstadoInfo(GreenBtn,   "🎉", "¡Listo!")
+    "completado" -> EstadoInfo(GreenLight, "🏆", "Completado")
+    "cancelado"  -> EstadoInfo(RedCancel,  "❌", "Cancelado")
+    else         -> EstadoInfo(Color.Gray, "❓", estado)
+}
+
+fun tiempoTranscurrido(timestamp: Long): String {
+    val diff = System.currentTimeMillis() - timestamp
+    val minutos = diff / 60_000
+    return when {
+        minutos < 1  -> "ahora"
+        minutos < 60 -> "${minutos}min"
+        else         -> "${minutos / 60}h ${minutos % 60}min"
     }
 }
 
@@ -495,6 +738,39 @@ fun ProductoMiniCard(
                 }
                 Text("\$${String.format("%.0f", producto.precio)}", color = GreenBtn, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
+        }
+    }
+}
+
+@Composable
+fun SpeedDialOpcion(icono: ImageVector, etiqueta: String, onClick: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.End,
+        modifier = Modifier.clickable { onClick() }
+    ) {
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = Color(0xFF1A3320),
+            shadowElevation = 4.dp
+        ) {
+            Text(
+                etiqueta,
+                color = Color.White,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        FloatingActionButton(
+            onClick = onClick,
+            containerColor = DarkCard,
+            contentColor = GreenBtn,
+            shape = CircleShape,
+            modifier = Modifier.size(44.dp)
+        ) {
+            Icon(icono, contentDescription = etiqueta, modifier = Modifier.size(22.dp))
         }
     }
 }

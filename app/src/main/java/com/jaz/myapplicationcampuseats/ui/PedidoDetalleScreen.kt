@@ -11,15 +11,19 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jaz.myapplicationcampuseats.model.Pedido
+import com.jaz.myapplicationcampuseats.model.Resena
 import com.jaz.myapplicationcampuseats.model.Usuario
 import com.jaz.myapplicationcampuseats.repository.PedidoRepository
 import com.jaz.myapplicationcampuseats.repository.ResenaRepository
-import com.jaz.myapplicationcampuseats.model.Resena
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun PedidoDetalleScreen(
@@ -36,16 +40,13 @@ fun PedidoDetalleScreen(
 
     val uid = usuarioActual?.uid ?: ""
 
-    // Listener en tiempo real
     DisposableEffect(pedidoId) {
         val listener = PedidoRepository.escucharPedido(pedidoId) { p ->
-            pedido = p
-            cargando = false
+            pedido = p; cargando = false
         }
         onDispose { listener.remove() }
     }
 
-    // Verificar si ya calificó (cuando el pedido esté completado)
     LaunchedEffect(pedido?.estado) {
         if (pedido?.estado == "completado" && uid.isNotEmpty()) {
             ResenaRepository.yaCalificoPedido(pedidoId, uid) { yaCalificaron = it }
@@ -71,38 +72,30 @@ fun PedidoDetalleScreen(
 
     if (mostrarDialogoResena) {
         DialogoResena(
-            pedido = p,
-            autorId = uid,
+            pedido = p, autorId = uid,
             autorNombre = usuarioActual?.nombre ?: "",
             esVendedor = esVendedor,
             onDismiss = { mostrarDialogoResena = false },
-            onEnviado = {
-                yaCalificaron = true
-                mostrarDialogoResena = false
-            }
+            onEnviado = { yaCalificaron = true; mostrarDialogoResena = false }
         )
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(DarkBg)
-    ) {
+    val info = estadoInfo(p.estado)
+
+    Column(modifier = Modifier.fillMaxSize().background(DarkBg)) {
+
         // Header
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 12.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onVolver) {
                 Icon(Icons.Default.ArrowBack, null, tint = Color.White)
             }
             Column(modifier = Modifier.weight(1f)) {
-                Text("Pedido", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Text(p.id.take(8) + "...", color = Color.Gray, fontSize = 12.sp)
+                Text("Detalle del pedido", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(p.id.take(12) + "...", color = Color.Gray, fontSize = 11.sp)
             }
-            // Botón de chat
             IconButton(onClick = {
                 val otroNombre = if (esVendedor) p.nombreCliente else p.nombreVendedor
                 onChat(otroNombre)
@@ -115,12 +108,69 @@ fun PedidoDetalleScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Estado del pedido
+
+            // ── Estado con color de fondo ──
             item {
-                EstadoPedidoCard(estado = p.estado)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(info.color)
+                        .padding(16.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(info.emoji, fontSize = 36.sp)
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column {
+                            Text(info.label, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                descripcionEstado(p.estado),
+                                color = Color.White.copy(alpha = 0.85f),
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+                }
             }
 
-            // Información de entrega
+            // ── Fecha y tiempo ──
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = DarkSurface)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("📅 Fecha del pedido", color = Color.Gray, fontSize = 12.sp)
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
+                                    .format(Date(p.fecha)),
+                                color = Color.White,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("⏱ Tiempo activo", color = Color.Gray, fontSize = 12.sp)
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                tiempoTranscurrido(p.fecha),
+                                color = info.color,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+
+            // ── Información ──
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -130,8 +180,10 @@ fun PedidoDetalleScreen(
                     Column(modifier = Modifier.padding(14.dp)) {
                         Text("Información", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(8.dp))
-                        InfoRow("👤 ${if (esVendedor) "Cliente" else "Vendedor"}",
-                            if (esVendedor) p.nombreCliente else p.nombreVendedor)
+                        InfoRow(
+                            "👤 ${if (esVendedor) "Cliente" else "Vendedor"}",
+                            if (esVendedor) p.nombreCliente else p.nombreVendedor
+                        )
                         InfoRow("📦 Entrega",
                             when (p.preferenciaEntrega) {
                                 "cliente_recoge" -> "Tú recoges con el vendedor"
@@ -140,18 +192,17 @@ fun PedidoDetalleScreen(
                             }
                         )
                         InfoRow("💳 Pago",
-                            if (p.metodoPago == "tarjeta") "Tarjeta — se libera al confirmar" else "Efectivo")
-                        if (p.notas.isNotEmpty()) {
-                            InfoRow("📝 Notas", p.notas)
-                        }
+                            if (p.metodoPago == "tarjeta") "Tarjeta — se libera al confirmar"
+                            else "Efectivo"
+                        )
+                        if (p.notas.isNotEmpty()) InfoRow("📝 Notas", p.notas)
                     }
                 }
             }
 
-            // Productos del pedido
-            item {
-                Text("Productos", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-            }
+            // ── Productos ──
+            item { Text("Productos", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+
             items(p.items) { itemMap ->
                 val nombre = itemMap["nombre"] as? String ?: ""
                 val precio = (itemMap["precio"] as? Double) ?: 0.0
@@ -166,12 +217,15 @@ fun PedidoDetalleScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text("$cantidad× $nombre", color = Color.White, fontSize = 14.sp)
-                        Text("\$${String.format("%.2f", precio * cantidad)}", color = GreenBtn, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            "\$${String.format("%.2f", precio * cantidad)}",
+                            color = GreenBtn, fontSize = 14.sp, fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
 
-            // Total
+            // ── Total ──
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -180,15 +234,13 @@ fun PedidoDetalleScreen(
                     Text("Total", color = Color.Gray, fontSize = 16.sp)
                     Text(
                         "\$${String.format("%.2f", p.total)}",
-                        color = Color.White,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
+                        color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold
                     )
                 }
             }
 
-            // Acciones del VENDEDOR
-            if (esVendedor && p.estado != "completado" && p.estado != "cancelado") {
+            // ── Acciones del VENDEDOR ──
+            if (esVendedor && p.estado !in listOf("completado", "cancelado")) {
                 item {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text("Gestionar pedido", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
@@ -197,39 +249,20 @@ fun PedidoDetalleScreen(
                         estado = p.estado,
                         procesando = procesando,
                         vendedorConfirmo = p.vendedorConfirmoEntrega,
-                        onAceptar = {
-                            procesando = true
-                            PedidoRepository.cambiarEstado(pedidoId, "aceptado") { procesando = false }
-                        },
-                        onEspera = {
-                            procesando = true
-                            PedidoRepository.cambiarEstado(pedidoId, "en_espera") { procesando = false }
-                        },
-                        onListo = {
-                            procesando = true
-                            PedidoRepository.cambiarEstado(pedidoId, "listo") { procesando = false }
-                        },
-                        onCancelar = {
-                            procesando = true
-                            PedidoRepository.cambiarEstado(pedidoId, "cancelado") { procesando = false }
-                        },
-                        onConfirmarEntrega = {
-                            procesando = true
-                            PedidoRepository.vendedorConfirmaEntrega(pedidoId) { procesando = false }
-                        }
+                        onAceptar = { procesando = true; PedidoRepository.cambiarEstado(pedidoId, "aceptado") { procesando = false } },
+                        onEspera = { procesando = true; PedidoRepository.cambiarEstado(pedidoId, "en_espera") { procesando = false } },
+                        onListo = { procesando = true; PedidoRepository.cambiarEstado(pedidoId, "listo") { procesando = false } },
+                        onCancelar = { procesando = true; PedidoRepository.cambiarEstado(pedidoId, "cancelado") { procesando = false } },
+                        onConfirmarEntrega = { procesando = true; PedidoRepository.vendedorConfirmaEntrega(pedidoId) { procesando = false } }
                     )
                 }
             }
 
-            // Acciones del CLIENTE
-            if (esCliente && (p.estado == "listo" || p.estado == "aceptado") && !p.clienteConfirmoEntrega) {
+            // ── Acciones del CLIENTE ──
+            if (esCliente && p.estado in listOf("listo", "aceptado") && !p.clienteConfirmoEntrega) {
                 item {
-                    Spacer(modifier = Modifier.height(4.dp))
                     Button(
-                        onClick = {
-                            procesando = true
-                            PedidoRepository.clienteConfirmaEntrega(pedidoId) { procesando = false }
-                        },
+                        onClick = { procesando = true; PedidoRepository.clienteConfirmaEntrega(pedidoId) { procesando = false } },
                         modifier = Modifier.fillMaxWidth().height(50.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = GreenBtn),
@@ -241,29 +274,19 @@ fun PedidoDetalleScreen(
                     }
                     if (p.metodoPago == "tarjeta") {
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            "Al confirmar, se liberará el pago al vendedor",
-                            color = Color.Gray,
-                            fontSize = 12.sp
-                        )
+                        Text("Al confirmar, se liberará el pago al vendedor", color = Color.Gray, fontSize = 12.sp)
                     }
                 }
             }
 
-            // Confirmaciones en progreso
-            if (p.estado == "listo" || p.estado == "aceptado") {
-                item {
-                    ConfirmacionesCard(
-                        clienteConfirmo = p.clienteConfirmoEntrega,
-                        vendedorConfirmo = p.vendedorConfirmoEntrega
-                    )
-                }
+            // ── Confirmaciones ──
+            if (p.estado in listOf("listo", "aceptado")) {
+                item { ConfirmacionesCard(p.clienteConfirmoEntrega, p.vendedorConfirmoEntrega) }
             }
 
-            // Botón calificar (cuando completado y no ha calificado)
+            // ── Calificar ──
             if (p.estado == "completado" && !yaCalificaron) {
                 item {
-                    Spacer(modifier = Modifier.height(4.dp))
                     OutlinedButton(
                         onClick = { mostrarDialogoResena = true },
                         modifier = Modifier.fillMaxWidth().height(48.dp),
@@ -282,31 +305,32 @@ fun PedidoDetalleScreen(
     }
 }
 
+fun descripcionEstado(estado: String) = when (estado) {
+    "pendiente"  -> "Esperando respuesta del vendedor"
+    "en_espera"  -> "El vendedor está preparando tu pedido"
+    "aceptado"   -> "El vendedor aceptó — coordina la entrega"
+    "listo"      -> "Tu pedido está listo para recoger / entregar"
+    "completado" -> "Pedido entregado con éxito"
+    "cancelado"  -> "Este pedido fue cancelado"
+    else -> ""
+}
+
 @Composable
 fun EstadoPedidoCard(estado: String) {
-    val (color, emoji, label, descripcion) = when (estado) {
-        "pendiente"  -> listOf(OrangeWarn, "⏳", "Pendiente", "Esperando respuesta del vendedor")
-        "en_espera"  -> listOf(OrangeWarn, "🕐", "En espera", "El vendedor está preparando tu pedido")
-        "aceptado"   -> listOf(GreenBtn, "✅", "Aceptado", "El vendedor aceptó — coordina la entrega")
-        "listo"      -> listOf(GreenBtn, "🎉", "¡Listo!", "Tu pedido está listo para recoger / entregar")
-        "completado" -> listOf(GreenLight, "🏆", "Completado", "Pedido entregado con éxito")
-        "cancelado"  -> listOf(RedCancel, "❌", "Cancelado", "Este pedido fue cancelado")
-        else         -> listOf(Color.Gray, "❓", estado, "")
-    }
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = (color as Color).copy(alpha = 0.15f))
+    val info = estadoInfo(estado)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(info.color)
+            .padding(16.dp)
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(emoji as String, fontSize = 32.sp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(info.emoji, fontSize = 32.sp)
             Spacer(modifier = Modifier.width(12.dp))
             Column {
-                Text(label as String, color = color, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text(descripcion as String, color = Color.Gray, fontSize = 13.sp)
+                Text(info.label, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text(descripcionEstado(estado), color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp)
             }
         }
     }
@@ -314,14 +338,9 @@ fun EstadoPedidoCard(estado: String) {
 
 @Composable
 fun AccionesVendedor(
-    estado: String,
-    procesando: Boolean,
-    vendedorConfirmo: Boolean,
-    onAceptar: () -> Unit,
-    onEspera: () -> Unit,
-    onListo: () -> Unit,
-    onCancelar: () -> Unit,
-    onConfirmarEntrega: () -> Unit
+    estado: String, procesando: Boolean, vendedorConfirmo: Boolean,
+    onAceptar: () -> Unit, onEspera: () -> Unit, onListo: () -> Unit,
+    onCancelar: () -> Unit, onConfirmarEntrega: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (estado == "pendiente") {
@@ -348,8 +367,7 @@ fun AccionesVendedor(
                 enabled = !procesando
             ) { Text("❌ Declinar pedido", color = RedCancel) }
         }
-
-        if (estado == "aceptado" || estado == "en_espera") {
+        if (estado in listOf("aceptado", "en_espera")) {
             Button(
                 onClick = onListo,
                 modifier = Modifier.fillMaxWidth().height(46.dp),
@@ -364,7 +382,6 @@ fun AccionesVendedor(
                 enabled = !procesando
             ) { Text("❌ Cancelar pedido", color = RedCancel) }
         }
-
         if (estado == "listo" && !vendedorConfirmo) {
             Button(
                 onClick = onConfirmarEntrega,
@@ -413,28 +430,27 @@ fun InfoRow(label: String, valor: String) {
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(label, color = Color.Gray, fontSize = 13.sp, modifier = Modifier.weight(1f))
-        Text(valor, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium,
-            modifier = Modifier.weight(1.2f), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+        Text(
+            valor, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium,
+            modifier = Modifier.weight(1.2f),
+            textAlign = androidx.compose.ui.text.style.TextAlign.End
+        )
     }
     HorizontalDivider(color = Color.White.copy(alpha = 0.07f), modifier = Modifier.padding(vertical = 2.dp))
 }
 
 @Composable
 fun DialogoResena(
-    pedido: Pedido,
-    autorId: String,
-    autorNombre: String,
-    esVendedor: Boolean,
-    onDismiss: () -> Unit,
-    onEnviado: () -> Unit
+    pedido: Pedido, autorId: String, autorNombre: String,
+    esVendedor: Boolean, onDismiss: () -> Unit, onEnviado: () -> Unit
 ) {
     var estrellas by remember { mutableStateOf(5) }
     var comentario by remember { mutableStateOf("") }
     var enviando by remember { mutableStateOf(false) }
 
     val destinatarioId = if (esVendedor) pedido.clienteId else pedido.vendedorId
-    val destinatarioNombre = if (esVendedor) pedido.nombreCliente else pedido.nombreVendedor
     val rolDestinatario = if (esVendedor) "comprador" else "vendedor"
+    val destinatarioNombre = if (esVendedor) pedido.nombreCliente else pedido.nombreVendedor
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -444,7 +460,6 @@ fun DialogoResena(
             Column {
                 Text("¿Cómo fue tu experiencia?", color = Color.Gray, fontSize = 13.sp)
                 Spacer(modifier = Modifier.height(12.dp))
-                // Estrellas
                 Row {
                     (1..5).forEach { i ->
                         IconButton(onClick = { estrellas = i }, modifier = Modifier.size(36.dp)) {
@@ -469,18 +484,11 @@ fun DialogoResena(
                 onClick = {
                     enviando = true
                     val resena = Resena(
-                        pedidoId = pedido.id,
-                        autorId = autorId,
-                        autorNombre = autorNombre,
-                        destinatarioId = destinatarioId,
-                        rolDestinatario = rolDestinatario,
-                        estrellas = estrellas,
-                        comentario = comentario
+                        pedidoId = pedido.id, autorId = autorId, autorNombre = autorNombre,
+                        destinatarioId = destinatarioId, rolDestinatario = rolDestinatario,
+                        estrellas = estrellas, comentario = comentario
                     )
-                    ResenaRepository.enviarResena(resena) {
-                        enviando = false
-                        onEnviado()
-                    }
+                    ResenaRepository.enviarResena(resena) { enviando = false; onEnviado() }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = GreenBtn),
                 enabled = !enviando

@@ -9,7 +9,6 @@ object ChatRepository {
 
     private val db = FirebaseFirestore.getInstance()
 
-    // Los mensajes viven bajo pedidos/{pedidoId}/chat
     private fun chatRef(pedidoId: String) = db
         .collection("pedidos")
         .document(pedidoId)
@@ -18,12 +17,24 @@ object ChatRepository {
     fun enviarMensaje(
         pedidoId: String,
         mensaje: MensajeChat,
+        destinatarioUid: String = "",           // para enviar la notificación push
         onSuccess: () -> Unit = {},
         onError: (String) -> Unit = {}
     ) {
         val doc = chatRef(pedidoId).document()
         doc.set(mensaje.copy(id = doc.id, pedidoId = pedidoId))
-            .addOnSuccessListener { onSuccess() }
+            .addOnSuccessListener {
+                // Enviar notificación push al destinatario si se especificó
+                if (destinatarioUid.isNotEmpty() && mensaje.texto.isNotEmpty()) {
+                    FcmRepository.notificarMensajeChat(
+                        destinatarioUid = destinatarioUid,
+                        remitenteNombre = mensaje.autorNombre,
+                        pedidoId        = pedidoId,
+                        mensaje         = mensaje.texto
+                    )
+                }
+                onSuccess()
+            }
             .addOnFailureListener { onError(it.message ?: "Error") }
     }
 

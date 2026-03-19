@@ -19,11 +19,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jaz.myapplicationcampuseats.model.MensajeChat
+import com.jaz.myapplicationcampuseats.model.Pedido
 import com.jaz.myapplicationcampuseats.model.Usuario
 import com.jaz.myapplicationcampuseats.repository.ChatRepository
+import com.jaz.myapplicationcampuseats.repository.PedidoRepository
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun ChatScreen(
@@ -32,91 +35,79 @@ fun ChatScreen(
     otroNombre: String,
     onVolver: () -> Unit
 ) {
-    var texto by remember { mutableStateOf("") }
     var mensajes by remember { mutableStateOf<List<MensajeChat>>(emptyList()) }
+    var texto by remember { mutableStateOf("") }
+    var enviando by remember { mutableStateOf(false) }
+    var pedido by remember { mutableStateOf<Pedido?>(null) }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-    val uid = usuarioActual?.uid ?: ""
 
-    // Listener en tiempo real
+    val uid = usuarioActual?.uid ?: ""
+    val nombre = usuarioActual?.nombre ?: ""
+
+    // Cargar el pedido para saber quién es el destinatario
+    LaunchedEffect(pedidoId) {
+        PedidoRepository.escucharPedido(pedidoId) { p -> pedido = p }
+    }
+
+    // Listener de mensajes
     DisposableEffect(pedidoId) {
         val listener = ChatRepository.escucharMensajes(pedidoId) { lista ->
             mensajes = lista
+            scope.launch {
+                if (lista.isNotEmpty()) {
+                    listState.animateScrollToItem(lista.size - 1)
+                }
+            }
         }
         onDispose { listener.remove() }
     }
 
-    // Auto-scroll al último mensaje
-    LaunchedEffect(mensajes.size) {
-        if (mensajes.isNotEmpty()) {
-            listState.animateScrollToItem(mensajes.size - 1)
-        }
+    // UID del destinatario (el otro participante del pedido)
+    val destinatarioUid = remember(pedido, uid) {
+        val p = pedido ?: return@remember ""
+        if (p.clienteId == uid) p.vendedorId else p.clienteId
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(DarkBg)
+        modifier = Modifier.fillMaxSize().background(DarkBg)
     ) {
         // Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(DarkCard)
-                .padding(horizontal = 8.dp, vertical = 10.dp),
+                .background(Color(0xFF16213E))
+                .padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onVolver) {
                 Icon(Icons.Default.ArrowBack, null, tint = Color.White)
             }
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .background(GreenBtn.copy(alpha = 0.2f), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    otroNombre.firstOrNull()?.uppercase() ?: "?",
-                    color = GreenBtn,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            Spacer(modifier = Modifier.width(10.dp))
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(otroNombre, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                Text("Chat del pedido", color = Color.Gray, fontSize = 12.sp)
+                // Estado del pedido
+                pedido?.let { p ->
+                    val info = estadoInfo(p.estado)
+                    Text(
+                        "${info.emoji} ${info.label}",
+                        color = info.color,
+                        fontSize = 12.sp
+                    )
+                }
             }
         }
 
         // Mensajes
         LazyColumn(
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 8.dp),
             state = listState,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            if (mensajes.isEmpty()) {
-                item {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("💬", fontSize = 40.sp)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("Inicia la conversación", color = Color.Gray, fontSize = 14.sp)
-                            Text(
-                                "Usa el chat para coordinar la entrega",
-                                color = Color.Gray.copy(alpha = 0.6f),
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-                }
-            }
             items(mensajes) { mensaje ->
                 val esPropio = mensaje.autorId == uid
+                val hora = SimpleDateFormat("HH:mm", Locale.getDefault())
+                    .format(Date(mensaje.timestamp))
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = if (esPropio) Arrangement.End else Arrangement.Start
@@ -128,9 +119,9 @@ fun ChatScreen(
                         if (!esPropio) {
                             Text(
                                 mensaje.autorNombre,
-                                color = GreenLight,
+                                color = Color.Gray,
                                 fontSize = 11.sp,
-                                modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
+                                modifier = Modifier.padding(bottom = 2.dp, start = 4.dp)
                             )
                         }
                         Box(
@@ -138,8 +129,7 @@ fun ChatScreen(
                                 .background(
                                     color = if (esPropio) GreenBtn else DarkSurface,
                                     shape = RoundedCornerShape(
-                                        topStart = 16.dp,
-                                        topEnd = 16.dp,
+                                        topStart = 16.dp, topEnd = 16.dp,
                                         bottomStart = if (esPropio) 16.dp else 4.dp,
                                         bottomEnd = if (esPropio) 4.dp else 16.dp
                                     )
@@ -148,12 +138,8 @@ fun ChatScreen(
                         ) {
                             Text(mensaje.texto, color = Color.White, fontSize = 15.sp)
                         }
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(mensaje.timestamp)),
-                            color = Color.Gray,
-                            fontSize = 10.sp
-                        )
+                        Text(hora, color = Color.Gray, fontSize = 10.sp,
+                            modifier = Modifier.padding(top = 2.dp, start = 4.dp, end = 4.dp))
                     }
                 }
             }
@@ -163,7 +149,7 @@ fun ChatScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(DarkCard)
+                .background(Color(0xFF16213E))
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -176,32 +162,40 @@ fun ChatScreen(
                 colors = OutlinedTextFieldDefaults.colors(
                     unfocusedTextColor = Color.White,
                     focusedTextColor = Color.White,
-                    unfocusedBorderColor = Color.Gray.copy(alpha = 0.4f),
+                    unfocusedBorderColor = Color.Gray,
                     focusedBorderColor = GreenBtn,
                     unfocusedContainerColor = DarkSurface,
                     focusedContainerColor = DarkSurface
                 ),
-                maxLines = 3
+                maxLines = 4
             )
             Spacer(modifier = Modifier.width(8.dp))
             IconButton(
                 onClick = {
                     val msg = texto.trim()
-                    if (msg.isNotEmpty() && uid.isNotEmpty()) {
-                        texto = ""
-                        val mensaje = MensajeChat(
-                            autorId = uid,
-                            autorNombre = usuarioActual?.nombre ?: "",
-                            texto = msg
-                        )
-                        ChatRepository.enviarMensaje(pedidoId, mensaje)
-                    }
+                    if (msg.isEmpty() || uid.isEmpty()) return@IconButton
+                    enviando = true
+                    val mensajeChat = MensajeChat(
+                        pedidoId    = pedidoId,
+                        autorId     = uid,
+                        autorNombre = nombre,
+                        texto       = msg,
+                        timestamp   = System.currentTimeMillis()
+                    )
+                    ChatRepository.enviarMensaje(
+                        pedidoId        = pedidoId,
+                        mensaje         = mensajeChat,
+                        destinatarioUid = destinatarioUid,
+                        onSuccess = { texto = ""; enviando = false },
+                        onError   = { enviando = false }
+                    )
                 },
                 modifier = Modifier
-                    .size(46.dp)
-                    .background(GreenBtn, CircleShape)
+                    .size(48.dp)
+                    .background(if (texto.isBlank()) DarkSurface else GreenBtn, CircleShape),
+                enabled = texto.isNotBlank() && !enviando
             ) {
-                Icon(Icons.Default.Send, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                Icon(Icons.Default.Send, null, tint = Color.White)
             }
         }
     }
