@@ -7,6 +7,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.Lifecycle
+import androidx.navigation.NavController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -16,6 +18,24 @@ import com.jaz.myapplicationcampuseats.repository.UsuarioRepository
 import com.jaz.myapplicationcampuseats.repository.FcmRepository
 import com.jaz.myapplicationcampuseats.model.Usuario
 import com.jaz.myapplicationcampuseats.ui.*
+
+/**
+ * Navegación segura: solo navega si la pantalla actual está RESUMED.
+ * Esto evita el bug de pantalla blanca al hacer click rápido.
+ */
+fun NavController.navigateSafe(route: String, builder: (androidx.navigation.NavOptionsBuilder.() -> Unit)? = null) {
+    val current = currentBackStackEntry?.lifecycle?.currentState
+    if (current == Lifecycle.State.RESUMED) {
+        if (builder != null) navigate(route, builder) else navigate(route)
+    }
+}
+
+fun NavController.popBackStackSafe() {
+    val current = currentBackStackEntry?.lifecycle?.currentState
+    if (current == Lifecycle.State.RESUMED) {
+        popBackStack()
+    }
+}
 
 object Routes {
     const val SPLASH = "splash"
@@ -53,7 +73,8 @@ fun AppNavigation(
     deepLinkOtroNombre: String? = null
 ) {
     val navController = rememberNavController()
-    // Navegar al destino del deep link (notificación)
+    // Navegar al destino del deep link (notificación) — usa navigate directo
+    // porque en el primer frame lifecycle puede no estar RESUMED aún
     LaunchedEffect(deepLinkDestino, deepLinkPedidoId) {
         if (deepLinkPedidoId.isNullOrEmpty()) return@LaunchedEffect
         when (deepLinkDestino) {
@@ -89,7 +110,7 @@ fun AppNavigation(
 
         composable(Routes.SPLASH) {
             SplashScreen(onFinish = {
-                navController.navigate(Routes.LOGIN) {
+                navController.navigateSafe(Routes.LOGIN) {
                     popUpTo(Routes.SPLASH) { inclusive = true }
                 }
             })
@@ -97,11 +118,11 @@ fun AppNavigation(
 
         composable(Routes.LOGIN) {
             LoginScreen(
-                onRegistrarme = { navController.navigate(Routes.REGISTRO) },
+                onRegistrarme = { navController.navigateSafe(Routes.REGISTRO) },
                 onEntrar = { usuario ->
                     usuarioActual = usuario
                     FcmRepository.registrarTokenActual()
-                    navController.navigate(Routes.HOME) {
+                    navController.navigateSafe(Routes.HOME) {
                         popUpTo(Routes.LOGIN) { inclusive = true }
                     }
                 }
@@ -110,11 +131,11 @@ fun AppNavigation(
 
         composable(Routes.REGISTRO) {
             RegistroScreen(
-                onVolver = { navController.popBackStack() },
+                onVolver = { navController.popBackStackSafe() },
                 onEntrar = { usuario ->
                     usuarioActual = usuario
                     FcmRepository.registrarTokenActual()
-                    navController.navigate(Routes.HOME) {
+                    navController.navigateSafe(Routes.HOME) {
                         popUpTo(Routes.REGISTRO) { inclusive = true }
                     }
                 }
@@ -124,26 +145,26 @@ fun AppNavigation(
         composable(Routes.HOME) {
             HomeScreen(
                 usuario = usuarioActual,
-                onCarrito = { navController.navigate(Routes.CARRITO) },
+                onCarrito = { navController.navigateSafe(Routes.CARRITO) },
                 onCerrarSesion = {
                     UsuarioRepository.cerrarSesion()
                     usuarioActual = null
-                    navController.navigate(Routes.LOGIN) {
+                    navController.navigateSafe(Routes.LOGIN) {
                         popUpTo(Routes.HOME) { inclusive = true }
                     }
                 },
-                onCuenta = { navController.navigate(Routes.CUENTA) },
-                onHistorial = { navController.navigate(Routes.HISTORIAL) },
-                onCategoria = { cat -> navController.navigate(Routes.categoria(cat)) },
-                onPublicar = { navController.navigate(Routes.PUBLICAR) },
-                onNotificaciones = { navController.navigate(Routes.NOTIFICACIONES) },
-                onPedidosVendedor = { navController.navigate(Routes.PEDIDOS_VENDEDOR) },
-                onAjustes = { navController.navigate(Routes.AJUSTES) },
-                onMisPublicaciones = { navController.navigate(Routes.MIS_PUBLICACIONES) },
-                onChats = { navController.navigate(Routes.CHATS) },
-                onAbrirPedido = { pedidoId -> navController.navigate(Routes.pedidoDetalle(pedidoId)) },
-                onAbrirChat = { pedidoId, otroNombre -> navController.navigate(Routes.chat(pedidoId, otroNombre)) },
-                onVerTienda = { vendedorId -> navController.navigate(Routes.tienda(vendedorId)) }
+                onCuenta = { navController.navigateSafe(Routes.CUENTA) },
+                onHistorial = { navController.navigateSafe(Routes.HISTORIAL) },
+                onCategoria = { cat -> navController.navigateSafe(Routes.categoria(cat)) },
+                onPublicar = { navController.navigateSafe(Routes.PUBLICAR) },
+                onNotificaciones = { navController.navigateSafe(Routes.NOTIFICACIONES) },
+                onPedidosVendedor = { navController.navigateSafe(Routes.PEDIDOS_VENDEDOR) },
+                onAjustes = { navController.navigateSafe(Routes.AJUSTES) },
+                onMisPublicaciones = { navController.navigateSafe(Routes.MIS_PUBLICACIONES) },
+                onChats = { navController.navigateSafe(Routes.CHATS) },
+                onAbrirPedido = { pedidoId -> navController.navigateSafe(Routes.pedidoDetalle(pedidoId)) },
+                onAbrirChat = { pedidoId, otroNombre -> navController.navigateSafe(Routes.chat(pedidoId, otroNombre)) },
+                onVerTienda = { vendedorId -> navController.navigateSafe(Routes.tienda(vendedorId)) }
             )
         }
 
@@ -155,9 +176,9 @@ fun AppNavigation(
             CategoriaScreen(
                 categoria = categoria,
                 usuarioId = usuarioActual?.uid ?: "",
-                onVolver = { navController.popBackStack() },
+                onVolver = { navController.popBackStackSafe() },
                 onVerTienda = { vendedorId ->
-                    navController.navigate(Routes.tienda(vendedorId))
+                    navController.navigateSafe(Routes.tienda(vendedorId))
                 }
             )
         }
@@ -166,9 +187,9 @@ fun AppNavigation(
             CarritoScreen(
                 userId = usuarioActual?.uid ?: "",
                 nombreCliente = usuarioActual?.nombre ?: "",
-                onVolver = { navController.popBackStack() },
+                onVolver = { navController.popBackStackSafe() },
                 onPedidoCreado = { pedidoId ->
-                    navController.navigate(Routes.pedidoDetalle(pedidoId)) {
+                    navController.navigateSafe(Routes.pedidoDetalle(pedidoId)) {
                         popUpTo(Routes.CARRITO) { inclusive = true }
                     }
                 }
@@ -183,20 +204,20 @@ fun AppNavigation(
             PedidoDetalleScreen(
                 pedidoId = pedidoId,
                 usuarioActual = usuarioActual,
-                onVolver = { navController.popBackStack() },
+                onVolver = { navController.popBackStackSafe() },
                 onChat = { otroNombre ->
-                    navController.navigate(Routes.chat(pedidoId, otroNombre))
+                    navController.navigateSafe(Routes.chat(pedidoId, otroNombre))
                 },
-                onVerPerfil = { uid -> navController.navigate(Routes.perfil(uid)) }
+                onVerPerfil = { uid -> navController.navigateSafe(Routes.perfil(uid)) }
             )
         }
 
         composable(Routes.PEDIDOS_VENDEDOR) {
             PedidosVendedorScreen(
                 vendedorId = usuarioActual?.uid ?: "",
-                onVolver = { navController.popBackStack() },
-                onAbrirPedido = { pedidoId -> navController.navigate(Routes.pedidoDetalle(pedidoId)) },
-                onAbrirChat = { pedidoId, otroNombre -> navController.navigate(Routes.chat(pedidoId, otroNombre)) }
+                onVolver = { navController.popBackStackSafe() },
+                onAbrirPedido = { pedidoId -> navController.navigateSafe(Routes.pedidoDetalle(pedidoId)) },
+                onAbrirChat = { pedidoId, otroNombre -> navController.navigateSafe(Routes.chat(pedidoId, otroNombre)) }
             )
         }
 
@@ -213,16 +234,16 @@ fun AppNavigation(
                 pedidoId = pedidoId,
                 usuarioActual = usuarioActual,
                 otroNombre = otroNombre,
-                onVolver = { navController.popBackStack() },
-                onVerPedido = { navController.navigate(Routes.pedidoDetalle(pedidoId)) },
-                onVerPerfil = { uid -> navController.navigate(Routes.perfil(uid)) }
+                onVolver = { navController.popBackStackSafe() },
+                onVerPedido = { navController.navigateSafe(Routes.pedidoDetalle(pedidoId)) },
+                onVerPerfil = { uid -> navController.navigateSafe(Routes.perfil(uid)) }
             )
         }
 
         composable(Routes.CUENTA) {
             CuentaScreen(
                 usuario = usuarioActual,
-                onVolver = { navController.popBackStack() },
+                onVolver = { navController.popBackStackSafe() },
                 onUsuarioActualizado = { usuarioActual = it }
             )
         }
@@ -230,21 +251,21 @@ fun AppNavigation(
         composable(Routes.HISTORIAL) {
             HistorialScreen(
                 userId = usuarioActual?.uid ?: "",
-                onVolver = { navController.popBackStack() },
-                onAbrirPedido = { pedidoId -> navController.navigate(Routes.pedidoDetalle(pedidoId)) },
-                onAbrirChat = { pedidoId, otroNombre -> navController.navigate(Routes.chat(pedidoId, otroNombre)) }
+                onVolver = { navController.popBackStackSafe() },
+                onAbrirPedido = { pedidoId -> navController.navigateSafe(Routes.pedidoDetalle(pedidoId)) },
+                onAbrirChat = { pedidoId, otroNombre -> navController.navigateSafe(Routes.chat(pedidoId, otroNombre)) }
             )
         }
 
         composable(Routes.AJUSTES) {
             AjustesScreen(
                 usuario = usuarioActual,
-                onVolver = { navController.popBackStack() },
+                onVolver = { navController.popBackStackSafe() },
                 onUsuarioActualizado = { usuarioActual = it },
                 onCerrarSesion = {
                     UsuarioRepository.cerrarSesion()
                     usuarioActual = null
-                    navController.navigate(Routes.LOGIN) {
+                    navController.navigateSafe(Routes.LOGIN) {
                         popUpTo(Routes.HOME) { inclusive = true }
                     }
                 }
@@ -254,12 +275,12 @@ fun AppNavigation(
         composable(Routes.NOTIFICACIONES) {
             NotificacionesScreen(
                 userId = usuarioActual?.uid ?: "",
-                onVolver = { navController.popBackStack() },
+                onVolver = { navController.popBackStackSafe() },
                 onAbrirPedido = { pedidoId ->
-                    navController.navigate(Routes.pedidoDetalle(pedidoId))
+                    navController.navigateSafe(Routes.pedidoDetalle(pedidoId))
                 },
                 onAbrirChat = { pedidoId, otroNombre ->
-                    navController.navigate(Routes.chat(pedidoId, otroNombre))
+                    navController.navigateSafe(Routes.chat(pedidoId, otroNombre))
                 }
             )
         }
@@ -269,16 +290,16 @@ fun AppNavigation(
                 userId = usuarioActual?.uid ?: "",
                 nombreVendedor = usuarioActual?.nombre ?: "",
                 ubicacionVendedor = usuarioActual?.ubicacionDescripcion ?: "",
-                onVolver = { navController.popBackStack() }
+                onVolver = { navController.popBackStackSafe() }
             )
         }
 
         composable(Routes.MIS_PUBLICACIONES) {
             MisPublicacionesScreen(
                 vendedorId = usuarioActual?.uid ?: "",
-                onVolver = { navController.popBackStack() },
+                onVolver = { navController.popBackStackSafe() },
                 onEditar = { producto ->
-                    navController.navigate(Routes.editarProducto(producto.id))
+                    navController.navigateSafe(Routes.editarProducto(producto.id))
                 }
             )
         }
@@ -286,9 +307,9 @@ fun AppNavigation(
         composable(Routes.CHATS) {
             ChatsScreen(
                 userId = usuarioActual?.uid ?: "",
-                onVolver = { navController.popBackStack() },
+                onVolver = { navController.popBackStackSafe() },
                 onAbrirChat = { pedidoId, otroNombre ->
-                    navController.navigate(Routes.chat(pedidoId, otroNombre))
+                    navController.navigateSafe(Routes.chat(pedidoId, otroNombre))
                 }
             )
         }
@@ -301,9 +322,9 @@ fun AppNavigation(
             TiendaScreen(
                 vendedorId = vendedorId,
                 userId = usuarioActual?.uid ?: "",
-                onVolver = { navController.popBackStack() },
-                onVerPerfil = { uid -> navController.navigate(Routes.perfil(uid)) },
-                onCarrito = { navController.navigate(Routes.CARRITO) }
+                onVolver = { navController.popBackStackSafe() },
+                onVerPerfil = { uid -> navController.navigateSafe(Routes.perfil(uid)) },
+                onCarrito = { navController.navigateSafe(Routes.CARRITO) }
             )
         }
 
@@ -314,8 +335,8 @@ fun AppNavigation(
             val uid = backStack.arguments?.getString("uid") ?: ""
             PerfilUsuarioScreen(
                 uid = uid,
-                onVolver = { navController.popBackStack() },
-                onVerTienda = { vendedorId -> navController.navigate(Routes.tienda(vendedorId)) }
+                onVolver = { navController.popBackStackSafe() },
+                onVerTienda = { vendedorId -> navController.navigateSafe(Routes.tienda(vendedorId)) }
             )
         }
    
@@ -337,7 +358,7 @@ fun AppNavigation(
                     userId = usuarioActual?.uid ?: "",
                     nombreVendedor = usuarioActual?.nombre ?: "",
                     ubicacionVendedor = usuarioActual?.ubicacionDescripcion ?: "",
-                    onVolver = { navController.popBackStack() },
+                    onVolver = { navController.popBackStackSafe() },
                     productoExistente = productoEditar
                 )
             } else {

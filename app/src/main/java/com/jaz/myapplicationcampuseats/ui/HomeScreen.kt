@@ -4,6 +4,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -436,7 +437,7 @@ fun HomeScreen(
                 MenuOpcion(Icons.Default.Person, "Mi cuenta") { menuAbierto = false; onCuenta() }
                 MenuOpcion(Icons.Default.Settings, "Ajustes") { menuAbierto = false; onAjustes() }
 
-                Spacer(modifier = Modifier.weight(1f))
+                Spacer(modifier = Modifier.height(40.dp))
                 HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
                 Spacer(modifier = Modifier.height(12.dp))
                 MenuOpcion(Icons.Default.ExitToApp, "Cerrar sesión", tint = RedCancel) {
@@ -536,9 +537,13 @@ fun ProductoPopularCard(producto: Producto, onClick: () -> Unit) {
             }
             Column(modifier = Modifier.padding(10.dp)) {
                 Text(producto.nombre, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                Text(producto.nombreVendedor, color = Color.Gray, fontSize = 10.sp, maxLines = 1)
-                if (producto.ubicacionVendedor.isNotEmpty()) {
-                    Text("📍 ${producto.ubicacionVendedor}", color = OrangeWarn.copy(alpha = 0.8f), fontSize = 9.sp, maxLines = 1)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(producto.nombreVendedor, color = Color.Gray, fontSize = 10.sp, maxLines = 1)
+                    if (producto.ubicacionVendedor.isNotEmpty()) {
+                        Text(" · ", color = Color.Gray, fontSize = 10.sp)
+                        Text("📍${producto.ubicacionVendedor}", color = OrangeWarn.copy(alpha = 0.8f), fontSize = 9.sp,
+                            maxLines = 1, modifier = Modifier.weight(1f, fill = false).basicMarquee())
+                    }
                 }
                 Text("\$${String.format("%.0f", producto.precio)}", color = GreenBtn, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             }
@@ -560,9 +565,13 @@ fun ProductoMiniCard(producto: Producto, modifier: Modifier = Modifier, onClick:
             }
             Column(modifier = Modifier.padding(10.dp)) {
                 Text(producto.nombre, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                Text(producto.nombreVendedor, color = Color.Gray, fontSize = 11.sp, maxLines = 1)
-                if (producto.ubicacionVendedor.isNotEmpty()) {
-                    Text("📍 ${producto.ubicacionVendedor}", color = OrangeWarn.copy(alpha = 0.8f), fontSize = 10.sp, maxLines = 1)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(producto.nombreVendedor, color = Color.Gray, fontSize = 11.sp, maxLines = 1)
+                    if (producto.ubicacionVendedor.isNotEmpty()) {
+                        Text(" · ", color = Color.Gray, fontSize = 11.sp)
+                        Text("📍${producto.ubicacionVendedor}", color = OrangeWarn.copy(alpha = 0.8f), fontSize = 10.sp,
+                            maxLines = 1, modifier = Modifier.basicMarquee())
+                    }
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(modifier = Modifier.fillMaxWidth(),

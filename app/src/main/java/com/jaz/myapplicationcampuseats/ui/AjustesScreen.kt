@@ -357,6 +357,66 @@ fun AjustesScreen(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Cerrar sesión", fontWeight = FontWeight.Bold)
                 }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // ── Eliminar cuenta ──
+                var mostrarDialogoEliminar by remember { mutableStateOf(false) }
+                var eliminando by remember { mutableStateOf(false) }
+
+                OutlinedButton(
+                    onClick = { mostrarDialogoEliminar = true },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = RedCancel)
+                ) {
+                    Icon(Icons.Default.DeleteForever, null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Eliminar mi cuenta", fontWeight = FontWeight.Bold)
+                }
+
+                if (mostrarDialogoEliminar) {
+                    AlertDialog(
+                        onDismissRequest = { if (!eliminando) mostrarDialogoEliminar = false },
+                        containerColor = DarkSurface,
+                        title = { Text("⚠️ Eliminar cuenta", color = RedCancel) },
+                        text = {
+                            Text("Esta acción es permanente. Se eliminarán todos tus datos, pedidos, publicaciones y reseñas. ¿Estás seguro?",
+                                color = Color.Gray, fontSize = 14.sp)
+                        },
+                        confirmButton = {
+                            Button(onClick = {
+                                eliminando = true
+                                val uid = usuario?.uid ?: return@Button
+                                // Eliminar datos de Firestore
+                                com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                    .collection("usuarios").document(uid).delete()
+                                // Eliminar cuenta de Auth
+                                com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.delete()
+                                    ?.addOnSuccessListener {
+                                        eliminando = false
+                                        mostrarDialogoEliminar = false
+                                        onCerrarSesion()
+                                    }
+                                    ?.addOnFailureListener {
+                                        eliminando = false
+                                        mostrarDialogoEliminar = false
+                                        // Si falla (sesión vieja), cerrar sesión de todos modos
+                                        onCerrarSesion()
+                                    }
+                            }, colors = ButtonDefaults.buttonColors(containerColor = RedCancel),
+                                enabled = !eliminando) {
+                                if (eliminando) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(18.dp))
+                                else Text("Eliminar permanentemente")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { mostrarDialogoEliminar = false }, enabled = !eliminando) {
+                                Text("Cancelar", color = Color.Gray)
+                            }
+                        }
+                    )
+                }
             }
         }
 

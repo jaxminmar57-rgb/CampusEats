@@ -259,6 +259,62 @@ fun PerfilUsuarioScreen(
                     ResenaCard(resena = resena)
                 }
             }
+
+            // Botón reportar
+            item {
+                var mostrarReporte by remember { mutableStateOf(false) }
+                var motivoReporte by remember { mutableStateOf("") }
+                var reporteEnviado by remember { mutableStateOf(false) }
+
+                Spacer(modifier = Modifier.height(20.dp))
+                if (!reporteEnviado) {
+                    OutlinedButton(
+                        onClick = { mostrarReporte = true },
+                        modifier = Modifier.fillMaxWidth().height(44.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text("🚩 Reportar usuario", color = RedCancel, fontSize = 13.sp) }
+                } else {
+                    Text("✅ Reporte enviado — lo revisaremos pronto", color = Color.Gray, fontSize = 13.sp,
+                        modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                }
+
+                if (mostrarReporte) {
+                    AlertDialog(
+                        onDismissRequest = { mostrarReporte = false },
+                        containerColor = DarkSurface,
+                        title = { Text("Reportar a ${u.nombre}", color = Color.White) },
+                        text = {
+                            Column {
+                                Text("¿Por qué quieres reportar a este usuario?", color = Color.Gray, fontSize = 13.sp)
+                                Spacer(modifier = Modifier.height(10.dp))
+                                OutlinedTextField(value = motivoReporte, onValueChange = { motivoReporte = it },
+                                    placeholder = { Text("Describe el problema...", color = Color.Gray) },
+                                    modifier = Modifier.fillMaxWidth().height(100.dp),
+                                    shape = RoundedCornerShape(10.dp), colors = camposColores(), maxLines = 4)
+                            }
+                        },
+                        confirmButton = {
+                            Button(onClick = {
+                                if (motivoReporte.isBlank()) return@Button
+                                com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                    .collection("reportes").add(mapOf(
+                                        "reportadoUid" to uid,
+                                        "reportadoNombre" to u.nombre,
+                                        "motivo" to motivoReporte.trim(),
+                                        "reportadoPor" to com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid,
+                                        "timestamp" to System.currentTimeMillis()
+                                    ))
+                                mostrarReporte = false
+                                reporteEnviado = true
+                            }, colors = ButtonDefaults.buttonColors(containerColor = RedCancel)) { Text("Enviar reporte") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { mostrarReporte = false }) { Text("Cancelar", color = Color.Gray) }
+                        }
+                    )
+                }
+                Spacer(modifier = Modifier.height(20.dp))
+            }
         }
     }
 }

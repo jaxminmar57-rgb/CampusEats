@@ -39,6 +39,7 @@ fun PedidoDetalleScreen(
 ) {
     val uid = usuarioActual?.uid ?: ""
     var mostrarDialogoResena by remember { mutableStateOf(false) }
+    var mostrarConfirmCancelar by remember { mutableStateOf(false) }
 
     // Iniciar listener UNA vez
     LaunchedEffect(pedidoId, uid) { vm.iniciarListener(pedidoId, uid) }
@@ -81,6 +82,30 @@ fun PedidoDetalleScreen(
             esVendedor = esVendedor,
             onDismiss = { mostrarDialogoResena = false },
             onEnviado = { vm.marcarCalificado(); mostrarDialogoResena = false })
+    }
+
+    // Diálogo de confirmación para cancelar
+    if (mostrarConfirmCancelar) {
+        AlertDialog(
+            onDismissRequest = { mostrarConfirmCancelar = false },
+            containerColor = DarkSurface,
+            title = { Text("¿Cancelar pedido?", color = Color.White) },
+            text = { Text("Esta acción no se puede deshacer. El pedido será cancelado para ambas partes.",
+                color = Color.Gray, fontSize = 14.sp) },
+            confirmButton = {
+                Button(onClick = {
+                    mostrarConfirmCancelar = false
+                    vm.cambiarEstado("cancelado")
+                }, colors = ButtonDefaults.buttonColors(containerColor = RedCancel)) {
+                    Text("Sí, cancelar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarConfirmCancelar = false }) {
+                    Text("No", color = Color.Gray)
+                }
+            }
+        )
     }
 
     Column(modifier = Modifier.fillMaxSize().background(DarkBg)) {
@@ -206,10 +231,19 @@ fun PedidoDetalleScreen(
                 val nombre   = itemMap["nombre"]   as? String ?: ""
                 val precio   = (itemMap["precio"]  as? Double) ?: 0.0
                 val cantidad = (itemMap["cantidad"] as? Long)?.toInt() ?: 1
+                val imagenUrl = itemMap["imagenUrl"] as? String ?: ""
                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp),
                     colors = CardDefaults.cardColors(containerColor = DarkSurface)) {
-                    Row(modifier = Modifier.padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("$cantidad× $nombre", color = Color.White, fontSize = 14.sp)
+                    Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (imagenUrl.isNotEmpty()) {
+                            coil.compose.AsyncImage(model = imagenUrl, contentDescription = nombre,
+                                modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+                            Spacer(modifier = Modifier.width(10.dp))
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("$cantidad× $nombre", color = Color.White, fontSize = 14.sp)
+                        }
                         Text("\$${String.format("%.2f", precio * cantidad)}", color = GreenBtn,
                             fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     }
@@ -234,7 +268,7 @@ fun PedidoDetalleScreen(
                         onAceptar = { vm.cambiarEstado("aceptado") },
                         onEspera  = { vm.cambiarEstado("en_espera") },
                         onListo   = { vm.cambiarEstado("listo") },
-                        onCancelar = { vm.cambiarEstado("cancelado") },
+                        onCancelar = { mostrarConfirmCancelar = true },
                         onConfirmarEntrega = { vm.vendedorConfirma() }
                     )
                 }
@@ -268,6 +302,18 @@ fun PedidoDetalleScreen(
 
             if (p.estado in listOf("listo", "aceptado")) {
                 item { ConfirmacionesCard(p.clienteConfirmoEntrega, p.vendedorConfirmoEntrega) }
+            }
+
+            // Cliente puede cancelar si el pedido no está completado/cancelado/listo
+            if (esCliente && p.estado in listOf("pendiente", "aceptado", "en_espera")) {
+                item {
+                    OutlinedButton(
+                        onClick = { mostrarConfirmCancelar = true },
+                        modifier = Modifier.fillMaxWidth().height(44.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        enabled = !procesando
+                    ) { Text("❌ Cancelar mi pedido", color = RedCancel, fontWeight = FontWeight.Bold) }
+                }
             }
 
             if (p.estado == "completado" && !yaCalificaron) {

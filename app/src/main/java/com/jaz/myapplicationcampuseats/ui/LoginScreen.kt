@@ -158,7 +158,57 @@ fun LoginScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Olvidé mi contraseña
+        var mostrarResetDialog by remember { mutableStateOf(false) }
+        var resetMsg by remember { mutableStateOf("") }
+
+        TextButton(onClick = { mostrarResetDialog = true }) {
+            Text("¿Olvidaste tu contraseña?", color = Color.Gray, fontSize = 13.sp)
+        }
+
+        if (mostrarResetDialog) {
+            var resetCorreo by remember { mutableStateOf(correo) }
+            AlertDialog(
+                onDismissRequest = { mostrarResetDialog = false },
+                containerColor = DarkSurface,
+                title = { Text("Recuperar contraseña", color = Color.White) },
+                text = {
+                    Column {
+                        Text("Te enviaremos un correo para restablecer tu contraseña.",
+                            color = Color.Gray, fontSize = 13.sp)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = resetCorreo, onValueChange = { resetCorreo = it },
+                            label = { Text("Correo electrónico", color = Color.Gray) },
+                            modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp),
+                            colors = camposColores(), singleLine = true
+                        )
+                        if (resetMsg.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(resetMsg, color = if (resetMsg.startsWith("✅")) GreenBtn else RedCancel, fontSize = 12.sp)
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        if (resetCorreo.isBlank()) { resetMsg = "Ingresa tu correo"; return@Button }
+                        com.google.firebase.auth.FirebaseAuth.getInstance()
+                            .sendPasswordResetEmail(resetCorreo.trim())
+                            .addOnSuccessListener { resetMsg = "✅ Correo enviado — revisa tu bandeja" }
+                            .addOnFailureListener { resetMsg = it.message ?: "Error" }
+                    }, colors = ButtonDefaults.buttonColors(containerColor = GreenBtn)) { Text("Enviar") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { mostrarResetDialog = false }) {
+                        Text("Cancelar", color = Color.Gray)
+                    }
+                }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("¿No tienes cuenta?", color = Color.Gray, fontSize = 14.sp)
