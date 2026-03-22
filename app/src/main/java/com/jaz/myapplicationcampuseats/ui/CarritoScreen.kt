@@ -71,7 +71,7 @@ fun CarritoScreen(
 
     val total = items.sumOf { it.precio * it.cantidad }
 
-    Column(modifier = Modifier.fillMaxSize().background(DarkBg)) {
+    Column(modifier = Modifier.fillMaxSize().background(DarkBg).statusBarsPadding()) {
         // Header
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),

@@ -105,10 +105,16 @@ object FcmRepository {
         )
     }
 
-    fun notificarMensajeChat(destinatarioUid: String, remitenteNombre: String, pedidoId: String, mensaje: String) {
+    fun notificarMensajeChat(destinatarioUid: String, remitenteNombre: String, pedidoId: String, mensaje: String, rolRemitente: String = "") {
+        val rolTexto = when (rolRemitente) {
+            "vendedor" -> "vendedor"
+            "cliente" -> "cliente"
+            else -> ""
+        }
+        val titulo = if (rolTexto.isNotEmpty()) "Chat con $rolTexto $remitenteNombre" else "Mensaje de $remitenteNombre"
         enviarNotificacion(
             destinatarioUid = destinatarioUid,
-            titulo     = "Mensaje de $remitenteNombre",
+            titulo     = titulo,
             cuerpo     = mensaje,
             tipo       = "chat",
             pedidoId   = pedidoId,

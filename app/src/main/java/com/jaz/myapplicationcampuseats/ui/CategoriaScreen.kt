@@ -64,6 +64,7 @@ fun CategoriaScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .background(DarkBg)
+                .statusBarsPadding()
         ) {
             Row(
                 modifier = Modifier

@@ -11,6 +11,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -55,7 +57,7 @@ fun MisPublicacionesScreen(
         )
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(DarkBg)) {
+    Column(modifier = Modifier.fillMaxSize().background(DarkBg).statusBarsPadding()) {
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onVolver) { Icon(Icons.Default.ArrowBack, "Volver", tint = Color.White) }
             Text("Mis publicaciones", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
@@ -153,6 +155,7 @@ fun MiProductoCard(
                     }
                 }
                 Switch(checked = producto.disponible, onCheckedChange = { onToggleDisponible(it) },
+                    modifier = Modifier.semantics { contentDescription = if (producto.disponible) "Disponible, desactivar" else "No disponible, activar" },
                     colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = GreenBtn))
             }
 
@@ -182,7 +185,7 @@ fun MiProductoCard(
                     } else {
                         IconButton(onClick = onQuitarStock, modifier = Modifier.size(32.dp),
                             enabled = producto.cantidadDisponible > 0) {
-                            Icon(Icons.Default.Remove, null,
+                            Icon(Icons.Default.Remove, "Quitar",
                                 tint = if (producto.cantidadDisponible > 0) OrangeWarn else Color.Gray,
                                 modifier = Modifier.size(18.dp))
                         }

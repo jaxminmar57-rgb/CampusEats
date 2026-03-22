@@ -43,7 +43,7 @@ fun NotificacionesScreen(
 
     val noLeidas = notificaciones.count { !it.leida }
 
-    Column(modifier = Modifier.fillMaxSize().background(DarkBg)) {
+    Column(modifier = Modifier.fillMaxSize().background(DarkBg).statusBarsPadding()) {
 
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
@@ -113,7 +113,7 @@ fun NotificacionCard(notif: NotificacionApp, onClick: () -> Unit, onEliminar: ()
     val bgColor = if (!notif.leida) accentColor.copy(alpha = 0.08f) else DarkBg
 
     Row(
-        modifier = Modifier.fillMaxWidth().background(bgColor).clickable { onClick() }.padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().background(bgColor).clickable(onClickLabel = "Ver") { onClick() }.padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.Top
     ) {
         // Ícono con punto no-leído

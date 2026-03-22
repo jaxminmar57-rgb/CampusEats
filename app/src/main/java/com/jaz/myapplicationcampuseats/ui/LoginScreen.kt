@@ -44,6 +44,7 @@ fun LoginScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(DarkBg)
+            .statusBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -78,7 +79,7 @@ fun LoginScreen(
             value = correo,
             onValueChange = { correo = it; error = "" },
             label = { Text("Correo electrónico", color = Color.Gray) },
-            leadingIcon = { Icon(Icons.Default.Email, null, tint = Color.Gray) },
+            leadingIcon = { Icon(Icons.Default.Email, "Correo", tint = Color.Gray) },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),

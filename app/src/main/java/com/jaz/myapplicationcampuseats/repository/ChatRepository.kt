@@ -1,5 +1,6 @@
 package com.jaz.myapplicationcampuseats.repository
 
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
@@ -17,20 +18,29 @@ object ChatRepository {
     fun enviarMensaje(
         pedidoId: String,
         mensaje: MensajeChat,
-        destinatarioUid: String = "",           // para enviar la notificación push
+        destinatarioUid: String = "",
+        rolRemitente: String = "",
         onSuccess: () -> Unit = {},
         onError: (String) -> Unit = {}
     ) {
         val doc = chatRef(pedidoId).document()
-        doc.set(mensaje.copy(id = doc.id, pedidoId = pedidoId))
+        val data = hashMapOf<String, Any>(
+            "id" to doc.id,
+            "pedidoId" to pedidoId,
+            "autorId" to mensaje.autorId,
+            "autorNombre" to mensaje.autorNombre,
+            "texto" to mensaje.texto,
+            "timestamp" to FieldValue.serverTimestamp()
+        )
+        doc.set(data)
             .addOnSuccessListener {
-                // Enviar notificación push al destinatario si se especificó
                 if (destinatarioUid.isNotEmpty() && mensaje.texto.isNotEmpty()) {
                     FcmRepository.notificarMensajeChat(
                         destinatarioUid = destinatarioUid,
                         remitenteNombre = mensaje.autorNombre,
                         pedidoId        = pedidoId,
-                        mensaje         = mensaje.texto
+                        mensaje         = mensaje.texto,
+                        rolRemitente    = rolRemitente
                     )
                 }
                 onSuccess()
@@ -45,9 +55,25 @@ object ChatRepository {
         return chatRef(pedidoId)
             .orderBy("timestamp", Query.Direction.ASCENDING)
             .addSnapshotListener { snapshot, _ ->
-                val mensajes = snapshot?.documents?.mapNotNull {
-                    it.toObject(MensajeChat::class.java)
-                }?.sortedWith(compareBy({ it.timestamp }, { it.id })) ?: emptyList()
+                // Leer manualmente para soportar tanto Timestamp como Long
+                val mensajes = snapshot?.documents?.mapNotNull { doc ->
+                    val ts = try {
+                        doc.getTimestamp("timestamp")?.toDate()?.time
+                            ?: doc.getLong("timestamp")
+                            ?: 0L
+                    } catch (_: Exception) {
+                        doc.getLong("timestamp") ?: 0L
+                    }
+                    if (ts == 0L) return@mapNotNull null // Ignorar docs sin timestamp aún
+                    MensajeChat(
+                        id = doc.getString("id") ?: doc.id,
+                        pedidoId = doc.getString("pedidoId") ?: "",
+                        autorId = doc.getString("autorId") ?: "",
+                        autorNombre = doc.getString("autorNombre") ?: "",
+                        texto = doc.getString("texto") ?: "",
+                        timestamp = ts
+                    )
+                } ?: emptyList()
                 onUpdate(mensajes)
             }
     }

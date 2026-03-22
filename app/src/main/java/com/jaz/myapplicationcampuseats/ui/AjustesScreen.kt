@@ -103,6 +103,7 @@ fun AjustesScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(DarkBg)
+            .statusBarsPadding()
             .verticalScroll(rememberScrollState())
     ) {
         // Header
@@ -183,7 +184,7 @@ fun AjustesScreen(
                     }
                 },
                 label = { Text("Teléfono (opcional)", color = Color.Gray) },
-                leadingIcon = { Icon(Icons.Default.Phone, null, tint = Color.Gray) },
+                leadingIcon = { Icon(Icons.Default.Phone, "Teléfono", tint = Color.Gray) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(10.dp),
                 colors = camposColores(),
@@ -199,10 +200,10 @@ fun AjustesScreen(
                     value = sexo,
                     onValueChange = {},
                     label = { Text("Sexo", color = Color.Gray) },
-                    leadingIcon = { Icon(Icons.Default.People, null, tint = Color.Gray) },
+                    leadingIcon = { Icon(Icons.Default.People, "Personas", tint = Color.Gray) },
                     trailingIcon = {
                         IconButton(onClick = { menuSexoAbierto = true }) {
-                            Icon(Icons.Default.ArrowDropDown, null, tint = Color.Gray)
+                            Icon(Icons.Default.ArrowDropDown, "Desplegar", tint = Color.Gray)
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),

@@ -61,6 +61,7 @@ fun PerfilUsuarioScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(DarkBg)
+            .statusBarsPadding()
     ) {
         // Header
         Row(
@@ -236,7 +237,7 @@ fun PerfilUsuarioScreen(
                                 color = GreenBtn,
                                 fontSize = 13.sp
                             )
-                            Icon(Icons.Default.ArrowDropDown, null, tint = GreenBtn)
+                            Icon(Icons.Default.ArrowDropDown, "Desplegar", tint = GreenBtn)
                         }
                         DropdownMenu(
                             expanded = menuOrdenAbierto,
@@ -253,7 +254,7 @@ fun PerfilUsuarioScreen(
                                     onClick = { ordenResenas = key; menuOrdenAbierto = false },
                                     leadingIcon = {
                                         if (ordenResenas == key) {
-                                            Icon(Icons.Default.Check, null, tint = GreenBtn, modifier = Modifier.size(16.dp))
+                                            Icon(Icons.Default.Check, "Seleccionado", tint = GreenBtn, modifier = Modifier.size(16.dp))
                                         }
                                     }
                                 )

@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.semantics
@@ -107,6 +108,10 @@ fun HomeScreen(
     var busqueda     by remember { mutableStateOf("") }
     var menuAbierto  by remember { mutableStateOf(false) }
     var mostrarDialogoUbicacion by remember { mutableStateOf(false) }
+    var mostrarDialogoBug by remember { mutableStateOf(false) }
+    var textoBug by remember { mutableStateOf("") }
+    var enviandoBug by remember { mutableStateOf(false) }
+    var bugEnviado by remember { mutableStateOf(false) }
     var nuevaUbicacion by remember { mutableStateOf(usuario?.ubicacionDescripcion ?: "") }
     var guardandoUbicacion by remember { mutableStateOf(false) }
 
@@ -184,6 +189,73 @@ fun HomeScreen(
             dismissButton = {
                 TextButton(onClick = { mostrarDialogoUbicacion = false }) {
                     Text("Cancelar", color = Color.Gray)
+                }
+            }
+        )
+    }
+
+    // Diálogo reporte de bug
+    if (mostrarDialogoBug) {
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoBug = false; textoBug = ""; bugEnviado = false },
+            containerColor = DarkSurface,
+            title = { Text(if (bugEnviado) "✅ ¡Gracias!" else "🐛 Reportar un bug", color = Color.White) },
+            text = {
+                if (bugEnviado) {
+                    Text("Tu reporte fue enviado. Lo revisaremos pronto.", color = Color.Gray, fontSize = 14.sp)
+                } else {
+                    Column {
+                        Text("Describe el problema que encontraste:", color = Color.Gray, fontSize = 13.sp)
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedTextField(
+                            value = textoBug, onValueChange = { textoBug = it },
+                            placeholder = { Text("Ej: Al abrir el chat se cierra la app...", color = Color.Gray) },
+                            modifier = Modifier.fillMaxWidth().height(120.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = camposColores(), maxLines = 5
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                if (bugEnviado) {
+                    Button(onClick = { mostrarDialogoBug = false; textoBug = ""; bugEnviado = false },
+                        colors = ButtonDefaults.buttonColors(containerColor = GreenBtn)) {
+                        Text("Cerrar")
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            if (textoBug.isBlank()) return@Button
+                            enviandoBug = true
+                            val reporte = hashMapOf(
+                                "uid" to (usuario?.uid ?: ""),
+                                "nombre" to (usuario?.nombre ?: "anónimo"),
+                                "correo" to (usuario?.correo ?: ""),
+                                "descripcion" to textoBug.trim(),
+                                "fecha" to System.currentTimeMillis(),
+                                "plataforma" to "Android ${android.os.Build.VERSION.RELEASE}",
+                                "dispositivo" to "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
+                                "appVersion" to "1.0"
+                            )
+                            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                .collection("bug_reports").add(reporte)
+                                .addOnSuccessListener { enviandoBug = false; bugEnviado = true }
+                                .addOnFailureListener { enviandoBug = false; bugEnviado = true }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = OrangeWarn),
+                        enabled = textoBug.isNotBlank() && !enviandoBug
+                    ) {
+                        if (enviandoBug) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(18.dp))
+                        else Text("Enviar reporte")
+                    }
+                }
+            },
+            dismissButton = {
+                if (!bugEnviado) {
+                    TextButton(onClick = { mostrarDialogoBug = false; textoBug = "" }) {
+                        Text("Cancelar", color = Color.Gray)
+                    }
                 }
             }
         )
@@ -332,7 +404,7 @@ fun HomeScreen(
                     LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         items(categoriasConProductos) { cat ->
                             Column(horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.clickable { onCategoria(cat.nombre) }) {
+                                modifier = Modifier.clickable(onClickLabel = "Ver ${cat.nombre}") { onCategoria(cat.nombre) }) {
                                 Box(modifier = Modifier.size(62.dp).clip(CircleShape)
                                     .background(DarkSurface),
                                     contentAlignment = Alignment.Center) {
@@ -382,15 +454,19 @@ fun HomeScreen(
             }
         }
 
-        // FAB — color refleja si el negocio está abierto o cerrado
-        val fabColor = if (negocioAbierto) GreenBtn else RedCancel
+        // FAB — color animado refleja si el negocio está abierto o cerrado
+        val animatedFabColor = if (negocioAbierto) GreenBtn else RedCancel
+        val fabScale = remember { androidx.compose.animation.core.Animatable(0f) }
+        LaunchedEffect(Unit) { fabScale.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.5f)) }
+
         FloatingActionButton(
             onClick = onPublicar,
-            containerColor = fabColor,
+            containerColor = animatedFabColor,
             contentColor = Color.White,
             shape = CircleShape,
             modifier = Modifier.align(Alignment.BottomEnd)
                 .padding(end = 20.dp, bottom = 24.dp).zIndex(2f).size(56.dp)
+                .graphicsLayer(scaleX = fabScale.value, scaleY = fabScale.value)
         ) {
             Icon(Icons.Default.Add, "Publicar platillo", modifier = Modifier.size(26.dp))
         }
@@ -493,6 +569,7 @@ fun HomeScreen(
                 MenuOpcion(Icons.Default.Add, "Publicar platillo") { menuAbierto = false; onPublicar() }
                 MenuOpcion(Icons.Default.List, "Pedidos recibidos") { menuAbierto = false; onPedidosVendedor() }
                 MenuOpcion(Icons.Default.RestaurantMenu, "Mis publicaciones") { menuAbierto = false; onMisPublicaciones() }
+                MenuOpcion(Icons.Default.Store, "Mi tienda") { menuAbierto = false; if (usuario?.uid?.isNotEmpty() == true) onVerTienda(usuario.uid) }
                 // Actualizar ubicación rápido (solo si su preferencia es cliente_recoge o ambos)
                 if (usuario?.preferenciaEntrega != "vendedor_lleva") {
                     MenuOpcion(Icons.Default.LocationOn, "Actualizar mi ubicación", tint = OrangeWarn) {
@@ -510,6 +587,9 @@ fun HomeScreen(
                 MenuOpcion(Icons.Default.Notifications, "Notificaciones") { menuAbierto = false; onNotificaciones() }
                 MenuOpcion(Icons.Default.Person, "Mi cuenta") { menuAbierto = false; onCuenta() }
                 MenuOpcion(Icons.Default.Settings, "Ajustes") { menuAbierto = false; onAjustes() }
+                MenuOpcion(Icons.Default.BugReport, "Reportar un bug", tint = OrangeWarn) {
+                    menuAbierto = false; mostrarDialogoBug = true
+                }
 
                 Spacer(modifier = Modifier.height(40.dp))
                 HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
@@ -528,7 +608,13 @@ fun HomeScreen(
 
 @Composable
 fun BadgeNumero(numero: Int, color: Color, modifier: Modifier = Modifier) {
+    val badgeScale = remember { androidx.compose.animation.core.Animatable(1f) }
+    LaunchedEffect(numero) {
+        badgeScale.animateTo(1.3f, androidx.compose.animation.core.tween(100))
+        badgeScale.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.4f))
+    }
     Box(modifier = modifier.defaultMinSize(minWidth = 16.dp, minHeight = 16.dp)
+        .graphicsLayer(scaleX = badgeScale.value, scaleY = badgeScale.value)
         .clip(CircleShape).background(color).padding(horizontal = 3.dp)
         .semantics { contentDescription = "$numero pendientes" },
         contentAlignment = Alignment.Center) {

@@ -16,6 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -88,6 +89,15 @@ fun ChatScreen(
         if (p.clienteId == uid) p.vendedorId else p.clienteId
     }
 
+    // Foto de perfil de la otra persona
+    var fotoOtro by remember { mutableStateOf("") }
+    LaunchedEffect(destinatarioUid) {
+        if (destinatarioUid.isNotEmpty()) {
+            com.jaz.myapplicationcampuseats.repository.UsuarioRepository.obtenerUsuario(
+                destinatarioUid, onSuccess = { fotoOtro = it.fotoPerfil })
+        }
+    }
+
     // Resumen breve del pedido para el header
     val resumenPedido = remember(pedido) {
         val p = pedido ?: return@remember ""
@@ -104,7 +114,7 @@ fun ChatScreen(
             .background(DarkBg)
             .imePadding()
     ) {
-        // ── Header FIJO (nunca se mueve) ──
+        // ── Header FIJO ──
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -114,36 +124,50 @@ fun ChatScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onVolver) {
-                    Icon(Icons.Default.ArrowBack, "Volver", tint = Color.White)
+                IconButton(onClick = onVolver, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Default.ArrowBack, "Volver", tint = Color.White, modifier = Modifier.size(22.dp))
                 }
+                // Avatar
+                Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(DarkSurface),
+                    contentAlignment = Alignment.Center) {
+                    if (fotoOtro.isNotEmpty()) {
+                        coil.compose.AsyncImage(model = fotoOtro, contentDescription = otroNombre,
+                            modifier = Modifier.fillMaxSize().clip(CircleShape),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+                    } else {
+                        Text(otroNombre.firstOrNull()?.uppercase() ?: "?",
+                            color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Spacer(modifier = Modifier.width(8.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    // Role tag + name
                     pedido?.let { p ->
                         val esVendedorChat = uid == p.vendedorId
                         val roleLabel = if (esVendedorChat) "📦 Vendiendo a" else "🛒 Comprando a"
                         val roleColor = if (esVendedorChat) OrangeWarn else BlueAceptado
-                        Text(roleLabel, color = roleColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text(roleLabel, color = roleColor, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                     }
-                    Text(otroNombre, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(otroNombre, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                     pedido?.let { p ->
                         val info = estadoInfo(p.estado)
-                        Text("${info.emoji} ${info.label}", color = info.color, fontSize = 12.sp)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("${info.emoji} ${info.label}", color = info.color, fontSize = 11.sp)
+                            Text(" · ", color = Color.Gray, fontSize = 11.sp)
+                            Text(textoEntregaCorto(p.preferenciaEntrega), color = Color.Gray, fontSize = 10.sp)
+                        }
                     }
                 }
-                // Botón para ver perfil de la otra persona
                 if (onVerPerfil != null && destinatarioUid.isNotEmpty()) {
-                    IconButton(onClick = { onVerPerfil(destinatarioUid) }) {
-                        Icon(Icons.Default.Person, "Ver perfil", tint = GreenBtn)
+                    IconButton(onClick = { onVerPerfil(destinatarioUid) }, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Default.Person, "Ver perfil", tint = GreenBtn, modifier = Modifier.size(20.dp))
                     }
                 }
-                // Botón para ir al detalle del pedido
                 if (onVerPedido != null) {
-                    IconButton(onClick = onVerPedido) {
-                        Icon(Icons.Default.Receipt, "Ver pedido", tint = GreenBtn)
+                    IconButton(onClick = onVerPedido, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Default.Receipt, "Ver pedido", tint = GreenBtn, modifier = Modifier.size(20.dp))
                     }
                 }
             }
@@ -296,6 +320,7 @@ fun ChatScreen(
                             texto = msg, timestamp = System.currentTimeMillis()
                         ),
                         destinatarioUid = destinatarioUid,
+                        rolRemitente = if (pedido?.vendedorId == uid) "vendedor" else "cliente",
                         onSuccess = { texto = ""; enviando = false; com.jaz.myapplicationcampuseats.service.SoundManager.playEnviar(context) },
                         onError   = { enviando = false }
                     )

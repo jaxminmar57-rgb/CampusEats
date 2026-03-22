@@ -71,7 +71,7 @@ fun TiendaScreen(
     }
 
     Scaffold(snackbarHost = { SnackbarHost(snackState) }, containerColor = DarkBg) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding).background(DarkBg)) {
+        Column(modifier = Modifier.fillMaxSize().padding(padding).background(DarkBg).statusBarsPadding()) {
 
             // Header
             Row(
@@ -122,7 +122,7 @@ fun TiendaScreen(
                         Column(modifier = Modifier.padding(16.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(modifier = Modifier.size(64.dp).clip(CircleShape)
-                                    .background(DarkSurface2).clickable { onVerPerfil(t.vendedorId) },
+                                    .background(DarkSurface2).clickable(onClickLabel = "Ver perfil") { onVerPerfil(t.vendedorId) },
                                     contentAlignment = Alignment.Center) {
                                     if (t.fotoPerfil.isNotEmpty()) {
                                         AsyncImage(model = t.fotoPerfil, contentDescription = "Imagen",

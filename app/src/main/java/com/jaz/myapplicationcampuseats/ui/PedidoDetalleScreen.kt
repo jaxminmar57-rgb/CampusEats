@@ -56,7 +56,7 @@ fun PedidoDetalleScreen(
     val ubicacionVendedor = vm.ubicacionVendedor
 
     if (cargando) {
-        Box(modifier = Modifier.fillMaxSize().background(DarkBg), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.fillMaxSize().background(DarkBg).statusBarsPadding(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = GreenBtn)
         }
         return
@@ -114,16 +114,21 @@ fun PedidoDetalleScreen(
         )
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(DarkBg)) {
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
+    Column(modifier = Modifier.fillMaxSize().background(DarkBg).statusBarsPadding()) {
+        // Role badge
+        val rolColor = if (esVendedor) OrangeWarn else BlueAceptado
+        val rolTexto = if (esVendedor) "📦 Vendiendo" else "🛒 Comprando"
+
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onVolver) { Icon(Icons.Default.ArrowBack, "Volver", tint = Color.White) }
             Column(modifier = Modifier.weight(1f)) {
-                Text("Detalle del pedido", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(rolTexto, color = rolColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text("Detalle del pedido", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 Text(p.id.take(12) + "...", color = Color.Gray, fontSize = 11.sp)
             }
             IconButton(onClick = { onChat(if (esVendedor) p.nombreCliente else p.nombreVendedor) }) {
-                Icon(Icons.Default.Chat, null, tint = GreenBtn)
+                Icon(Icons.Default.Chat, "Chat", tint = GreenBtn)
             }
         }
 
@@ -186,18 +191,21 @@ fun PedidoDetalleScreen(
                         Text("Información", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(8.dp))
                         // Nombre clickable para ir al perfil
+                        val otroRolTexto = if (esVendedor) "👤 Cliente" else "🏪 Vendedor"
+                        val otroRolColor = if (esVendedor) BlueAceptado else OrangeWarn
+                        val otroNombre = if (esVendedor) p.nombreCliente else p.nombreVendedor
                         Row(modifier = Modifier.fillMaxWidth().clickable {
                             val perfilUid = if (esVendedor) p.clienteId else p.vendedorId
                             onVerPerfil(perfilUid)
                         }.padding(vertical = 4.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically) {
-                            Text("👤 ${if (esVendedor) "Cliente" else "Vendedor"}", color = Color.Gray, fontSize = 13.sp)
+                            Text(otroRolTexto, color = otroRolColor, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(if (esVendedor) p.nombreCliente else p.nombreVendedor,
-                                    color = GreenBtn, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                Text(otroNombre,
+                                    color = otroRolColor, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Icon(Icons.Default.Person, "Perfil", tint = GreenBtn, modifier = Modifier.size(14.dp))
+                                Icon(Icons.Default.Person, "Perfil", tint = otroRolColor, modifier = Modifier.size(14.dp))
                             }
                         }
                         HorizontalDivider(color = Color.White.copy(alpha = 0.07f), modifier = Modifier.padding(vertical = 2.dp))

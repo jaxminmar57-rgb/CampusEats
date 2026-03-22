@@ -43,6 +43,7 @@ fun CuentaScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(DarkBg)
+            .statusBarsPadding()
             .verticalScroll(rememberScrollState())
     ) {
         // Header

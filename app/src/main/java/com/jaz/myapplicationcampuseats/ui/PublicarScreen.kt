@@ -15,6 +15,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -89,7 +91,7 @@ fun PublicarScreen(
         return
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(DarkBg).verticalScroll(rememberScrollState())) {
+    Column(modifier = Modifier.fillMaxSize().background(DarkBg).statusBarsPadding().verticalScroll(rememberScrollState())) {
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onVolver) { Icon(Icons.Default.ArrowBack, "Volver", tint = Color.White) }
             Text(if (modoEdicion) "Editar platillo" else "Publicar platillo", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
@@ -220,6 +222,7 @@ fun PublicarScreen(
                             Text(if (mostrarCantidad) "Los clientes verán cuántas quedan" else "Solo tú ves la cantidad", color = Color.Gray, fontSize = 12.sp)
                         }
                         Switch(checked = mostrarCantidad, onCheckedChange = { mostrarCantidad = it },
+                            modifier = Modifier.semantics { contentDescription = if (mostrarCantidad) "Cantidad visible, desactivar" else "Cantidad oculta, activar" },
                             colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = GreenBtn),
                             enabled = cantidadStr.isNotEmpty())
                     }

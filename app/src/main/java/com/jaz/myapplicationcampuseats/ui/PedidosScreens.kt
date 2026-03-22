@@ -46,7 +46,7 @@ fun HistorialScreen(
         else pedido.estado in listOf("completado", "cancelado")
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(DarkBg)) {
+    Column(modifier = Modifier.fillMaxSize().background(DarkBg).statusBarsPadding()) {
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onVolver) { Icon(Icons.Default.ArrowBack, "Volver", tint = Color.White) }
@@ -97,7 +97,7 @@ fun PedidoClienteCard(pedido: Pedido, onClick: () -> Unit, onChat: (() -> Unit)?
     )
 
     Card(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() },
+        modifier = Modifier.fillMaxWidth().clickable(onClickLabel = "Abrir") { onClick() },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = DarkSurface),
         border = if (esListo)
@@ -141,7 +141,7 @@ fun PedidoClienteCard(pedido: Pedido, onClick: () -> Unit, onChat: (() -> Unit)?
                                 Icon(Icons.Default.ChatBubble, "Chat", tint = GreenBtn, modifier = Modifier.size(18.dp))
                             }
                         }
-                        Icon(Icons.Default.ArrowForward, null, tint = Color.Gray, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.ArrowForward, "Ver más", tint = Color.Gray, modifier = Modifier.size(18.dp))
                     }
                 }
             }
@@ -172,7 +172,7 @@ fun PedidosVendedorScreen(
         else pedido.estado in listOf("completado", "cancelado")
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(DarkBg)) {
+    Column(modifier = Modifier.fillMaxSize().background(DarkBg).statusBarsPadding()) {
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onVolver) { Icon(Icons.Default.ArrowBack, "Volver", tint = Color.White) }
@@ -227,7 +227,7 @@ fun PedidoVendedorCard(pedido: Pedido, onClick: () -> Unit, onChat: (() -> Unit)
     )
 
     Card(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() },
+        modifier = Modifier.fillMaxWidth().clickable(onClickLabel = "Abrir") { onClick() },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = DarkSurface),
         border = if (esListo)
@@ -269,7 +269,7 @@ fun PedidoVendedorCard(pedido: Pedido, onClick: () -> Unit, onChat: (() -> Unit)
                                 Icon(Icons.Default.ChatBubble, "Chat", tint = GreenBtn, modifier = Modifier.size(18.dp))
                             }
                         }
-                        Icon(Icons.Default.ArrowForward, null, tint = Color.Gray, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.ArrowForward, "Ver más", tint = Color.Gray, modifier = Modifier.size(18.dp))
                     }
                 }
             }

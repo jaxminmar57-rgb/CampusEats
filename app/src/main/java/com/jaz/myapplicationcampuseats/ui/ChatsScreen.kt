@@ -43,7 +43,7 @@ fun ChatsScreen(
         else todosPedidos
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(DarkBg)) {
+    Column(modifier = Modifier.fillMaxSize().background(DarkBg).statusBarsPadding()) {
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onVolver) { Icon(Icons.Default.ArrowBack, "Volver", tint = Color.White) }
@@ -132,7 +132,7 @@ fun ChatResumenCard(
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() },
+        modifier = Modifier.fillMaxWidth().clickable(onClickLabel = "Abrir") { onClick() },
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = DarkSurface),
         border = cardBorder
@@ -141,7 +141,7 @@ fun ChatResumenCard(
 
             // Avatar with photo or initial
             Box(contentAlignment = Alignment.TopEnd) {
-                Box(modifier = Modifier.size(46.dp).clip(CircleShape)
+                Box(modifier = Modifier.size(52.dp).clip(CircleShape)
                     .background(if (esVendedor) OrangeWarn.copy(alpha = 0.15f) else BlueAceptado.copy(alpha = 0.15f)),
                     contentAlignment = Alignment.Center) {
                     if (fotoOtro.isNotEmpty()) {
@@ -152,7 +152,7 @@ fun ChatResumenCard(
                         )
                     } else {
                         Text(otroNombre.firstOrNull()?.uppercase() ?: "?",
-                            color = roleColor, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                            color = roleColor, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                     }
                 }
                 if (mensajesNuevos > 0) {

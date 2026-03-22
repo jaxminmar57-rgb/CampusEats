@@ -68,6 +68,7 @@ fun RegistroScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(DarkBg)
+            .statusBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -91,7 +92,7 @@ fun RegistroScreen(
         Box(
             modifier = Modifier.size(100.dp).clip(CircleShape).background(DarkSurface)
                 .border(2.dp, if (fotoUri != null) GreenBtn else Color.Gray, CircleShape)
-                .clickable { fotoLauncher.launch("image/*") },
+                .clickable(onClickLabel = "Seleccionar foto") { fotoLauncher.launch("image/*") },
             contentAlignment = Alignment.Center
         ) {
             if (fotoUri != null) {
@@ -99,7 +100,7 @@ fun RegistroScreen(
                     modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
             } else {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.AddAPhoto, null, tint = Color.Gray, modifier = Modifier.size(30.dp))
+                    Icon(Icons.Default.AddAPhoto, "Añadir foto", tint = Color.Gray, modifier = Modifier.size(30.dp))
                     Spacer(modifier = Modifier.height(4.dp))
                     Text("Agregar", color = Color.Gray, fontSize = 11.sp)
                 }
@@ -136,7 +137,7 @@ fun RegistroScreen(
         // Correo
         OutlinedTextField(value = correo, onValueChange = { correo = it; error = "" },
             label = { Text("Correo electrónico *", color = Color.Gray) },
-            leadingIcon = { Icon(Icons.Default.Email, null, tint = Color.Gray) },
+            leadingIcon = { Icon(Icons.Default.Email, "Correo", tint = Color.Gray) },
             modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
             colors = camposColores(), singleLine = true)
@@ -147,7 +148,7 @@ fun RegistroScreen(
         OutlinedTextField(value = edad,
             onValueChange = { if (it.length <= 2 && it.all { c -> c.isDigit() }) { edad = it; error = "" } },
             label = { Text("Edad *", color = Color.Gray) },
-            leadingIcon = { Icon(Icons.Default.CalendarToday, null, tint = Color.Gray) },
+            leadingIcon = { Icon(Icons.Default.CalendarToday, "Fecha", tint = Color.Gray) },
             modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             colors = camposColores(), singleLine = true)
@@ -158,9 +159,9 @@ fun RegistroScreen(
         Box {
             OutlinedTextField(value = sexo, onValueChange = {},
                 label = { Text("Sexo *", color = Color.Gray) },
-                leadingIcon = { Icon(Icons.Default.People, null, tint = Color.Gray) },
+                leadingIcon = { Icon(Icons.Default.People, "Personas", tint = Color.Gray) },
                 trailingIcon = { IconButton(onClick = { menuSexoAbierto = true }) {
-                    Icon(Icons.Default.ArrowDropDown, null, tint = Color.Gray) } },
+                    Icon(Icons.Default.ArrowDropDown, "Desplegar", tint = Color.Gray) } },
                 modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
                 colors = camposColores(), readOnly = true, singleLine = true,
                 placeholder = { Text("Selecciona una opción", color = Color.Gray) })
@@ -187,9 +188,9 @@ fun RegistroScreen(
             val etiquetaEntrega = opcionesEntrega.firstOrNull { it.first == preferenciaEntrega }?.second ?: ""
             OutlinedTextField(value = etiquetaEntrega, onValueChange = {},
                 label = { Text("Tipo de entrega *", color = Color.Gray) },
-                leadingIcon = { Icon(Icons.Default.LocalShipping, null, tint = Color.Gray) },
+                leadingIcon = { Icon(Icons.Default.LocalShipping, "Entrega", tint = Color.Gray) },
                 trailingIcon = { IconButton(onClick = { menuEntregaAbierto = true }) {
-                    Icon(Icons.Default.ArrowDropDown, null, tint = Color.Gray) } },
+                    Icon(Icons.Default.ArrowDropDown, "Desplegar", tint = Color.Gray) } },
                 modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
                 colors = camposColores(), readOnly = true, singleLine = true,
                 placeholder = { Text("Selecciona una opción", color = Color.Gray) })
@@ -210,7 +211,7 @@ fun RegistroScreen(
         OutlinedTextField(value = telefono,
             onValueChange = { if (it.length <= 15 && it.all { c -> c.isDigit() || c == '+' }) telefono = it },
             label = { Text("Teléfono (opcional)", color = Color.Gray) },
-            leadingIcon = { Icon(Icons.Default.Phone, null, tint = Color.Gray) },
+            leadingIcon = { Icon(Icons.Default.Phone, "Teléfono", tint = Color.Gray) },
             modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
             colors = camposColores(), singleLine = true)
@@ -222,7 +223,7 @@ fun RegistroScreen(
             label = { Text("Contraseña *", color = Color.Gray) },
             leadingIcon = { Icon(Icons.Default.Lock, "Contraseña", tint = Color.Gray) },
             trailingIcon = { IconButton(onClick = { verPassword = !verPassword }) {
-                Icon(if (verPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility, null, tint = Color.Gray) } },
+                Icon(if (verPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility, if (verPassword) "Ocultar contraseña" else "Mostrar contraseña", tint = Color.Gray) } },
             visualTransformation = if (verPassword) VisualTransformation.None else PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
