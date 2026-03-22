@@ -102,6 +102,7 @@ fun HomeScreen(
     val notifNoLeidas   = vm.notifNoLeidas
     val mensajesNuevosTotal = vm.mensajesNuevosTotal
     val vendedoresAbiertos  = vm.vendedoresAbiertos
+    val negocioAbierto      = vm.negocioAbierto
 
     // ── Datos derivados ────────────────────────────────────────────────────────
     // Solo mostrar productos de vendedores con negocio abierto
@@ -266,39 +267,6 @@ fun HomeScreen(
                     }
                 }
 
-                // Toggle "Abrir/Cerrar negocio" visible solo para vendedores
-                val esVendedorConProductos = remember(productos, usuario) {
-                    productos.any { it.vendedorId == usuario?.uid }
-                }
-                if (esVendedorConProductos) {
-                    val estaAbierto = usuario?.negocioAbierto == true
-                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(if (estaAbierto) GreenBtn.copy(alpha = 0.15f) else RedCancel.copy(alpha = 0.15f))
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(if (estaAbierto) "🟢" else "🔴", fontSize = 14.sp)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                if (estaAbierto) "Negocio abierto" else "Negocio cerrado",
-                                color = if (estaAbierto) GreenBtn else RedCancel,
-                                fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Switch(
-                            checked = estaAbierto,
-                            onCheckedChange = { vm.toggleNegocioAbierto(it) },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = GreenBtn,
-                                uncheckedThumbColor = Color.White,
-                                uncheckedTrackColor = RedCancel.copy(alpha = 0.5f)),
-                            modifier = Modifier.height(28.dp)
-                        )
-                    }
-                }
-
                 Spacer(modifier = Modifier.height(4.dp))
             }
 
@@ -394,10 +362,11 @@ fun HomeScreen(
             }
         }
 
-        // FAB simple — publicar platillo (las demás opciones están en el menú y top bar)
+        // FAB — color refleja si el negocio está abierto o cerrado
+        val fabColor = if (negocioAbierto) GreenBtn else RedCancel
         FloatingActionButton(
             onClick = onPublicar,
-            containerColor = GreenBtn,
+            containerColor = fabColor,
             contentColor = Color.White,
             shape = CircleShape,
             modifier = Modifier.align(Alignment.BottomEnd)
@@ -456,6 +425,34 @@ fun HomeScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text("VENDEDOR", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Toggle abrir/cerrar negocio
+                Row(modifier = Modifier.fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (negocioAbierto) GreenBtn.copy(alpha = 0.15f) else RedCancel.copy(alpha = 0.15f))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (negocioAbierto) "🟢" else "🔴", fontSize = 14.sp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            if (negocioAbierto) "Negocio abierto" else "Negocio cerrado",
+                            color = if (negocioAbierto) GreenBtn else RedCancel,
+                            fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Switch(
+                        checked = negocioAbierto,
+                        onCheckedChange = { vm.toggleNegocioAbierto(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = GreenBtn,
+                            uncheckedThumbColor = Color.White,
+                            uncheckedTrackColor = RedCancel.copy(alpha = 0.5f)),
+                        modifier = Modifier.height(24.dp)
+                    )
+                }
                 Spacer(modifier = Modifier.height(6.dp))
                 MenuOpcion(Icons.Default.Add, "Publicar platillo") { menuAbierto = false; onPublicar() }
                 MenuOpcion(Icons.Default.List, "Pedidos recibidos") { menuAbierto = false; onPedidosVendedor() }
