@@ -26,6 +26,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -102,6 +104,7 @@ fun HomeScreen(
     val notifNoLeidas   = vm.notifNoLeidas
     val mensajesNuevosTotal = vm.mensajesNuevosTotal
     val vendedoresAbiertos  = vm.vendedoresAbiertos
+    val negocioAbierto      = vm.negocioAbierto
 
     // ── Datos derivados ────────────────────────────────────────────────────────
     // Solo mostrar productos de vendedores con negocio abierto
@@ -192,7 +195,7 @@ fun HomeScreen(
                         if (pedidosActivos.isNotEmpty()) {
                             Box {
                                 IconButton(onClick = onHistorial, modifier = Modifier.size(40.dp)) {
-                                    Icon(Icons.Default.Receipt, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                                    Icon(Icons.Default.Receipt, "Pedidos", tint = Color.White, modifier = Modifier.size(22.dp))
                                 }
                                 BadgeNumero(pedidosActivos.size, OrangeWarn,
                                     Modifier.align(Alignment.TopEnd).offset(x = (-2).dp, y = 2.dp))
@@ -200,7 +203,7 @@ fun HomeScreen(
                         }
                         Box {
                             IconButton(onClick = onChats, modifier = Modifier.size(40.dp)) {
-                                Icon(Icons.Default.ChatBubble, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                                Icon(Icons.Default.ChatBubble, "Chat", tint = Color.White, modifier = Modifier.size(22.dp))
                             }
                             if (mensajesNuevosTotal > 0) {
                                 BadgeNumero(mensajesNuevosTotal, RedCancel,
@@ -209,7 +212,7 @@ fun HomeScreen(
                         }
                         Box {
                             IconButton(onClick = onNotificaciones, modifier = Modifier.size(40.dp)) {
-                                Icon(Icons.Default.Notifications, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                                Icon(Icons.Default.Notifications, "Notificaciones", tint = Color.White, modifier = Modifier.size(22.dp))
                             }
                             if (notifNoLeidas > 0) {
                                 BadgeNumero(notifNoLeidas, RedCancel,
@@ -218,7 +221,7 @@ fun HomeScreen(
                         }
                         Box {
                             IconButton(onClick = onCarrito, modifier = Modifier.size(40.dp)) {
-                                Icon(Icons.Default.ShoppingCart, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                                Icon(Icons.Default.ShoppingCart, "Carrito", tint = Color.White, modifier = Modifier.size(22.dp))
                             }
                             if (carritoCount > 0) {
                                 BadgeNumero(carritoCount, GreenBtn,
@@ -231,10 +234,10 @@ fun HomeScreen(
                 // Búsqueda (más compacta)
                 OutlinedTextField(value = busqueda, onValueChange = { busqueda = it },
                     placeholder = { Text("¿Qué se te antoja hoy?", color = Color.Gray, fontSize = 14.sp) },
-                    leadingIcon = { Icon(Icons.Default.Search, null, tint = Color.Gray, modifier = Modifier.size(20.dp)) },
+                    leadingIcon = { Icon(Icons.Default.Search, "Buscar", tint = Color.Gray, modifier = Modifier.size(20.dp)) },
                     trailingIcon = {
                         if (busqueda.isNotEmpty()) IconButton(onClick = { busqueda = "" }, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.Close, null, tint = Color.Gray, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.Close, "Cerrar", tint = Color.Gray, modifier = Modifier.size(18.dp))
                         }
                     },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(54.dp),
@@ -254,7 +257,7 @@ fun HomeScreen(
                             mostrarDialogoUbicacion = true
                         }.padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.LocationOn, null, tint = OrangeWarn, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.LocationOn, "Ubicación", tint = OrangeWarn, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         val ubicacion = usuario?.ubicacionDescripcion
                         Text(
@@ -262,40 +265,7 @@ fun HomeScreen(
                             else "📍 $ubicacion",
                             color = if (ubicacion.isNullOrBlank()) Color.Gray else Color.White,
                             fontSize = 12.sp, maxLines = 1, modifier = Modifier.weight(1f))
-                        Icon(Icons.Default.Edit, null, tint = Color.Gray, modifier = Modifier.size(14.dp))
-                    }
-                }
-
-                // Toggle "Abrir/Cerrar negocio" visible solo para vendedores
-                val esVendedorConProductos = remember(productos, usuario) {
-                    productos.any { it.vendedorId == usuario?.uid }
-                }
-                if (esVendedorConProductos) {
-                    val estaAbierto = usuario?.negocioAbierto == true
-                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(if (estaAbierto) GreenBtn.copy(alpha = 0.15f) else RedCancel.copy(alpha = 0.15f))
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(if (estaAbierto) "🟢" else "🔴", fontSize = 14.sp)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                if (estaAbierto) "Negocio abierto" else "Negocio cerrado",
-                                color = if (estaAbierto) GreenBtn else RedCancel,
-                                fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Switch(
-                            checked = estaAbierto,
-                            onCheckedChange = { vm.toggleNegocioAbierto(it) },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = GreenBtn,
-                                uncheckedThumbColor = Color.White,
-                                uncheckedTrackColor = RedCancel.copy(alpha = 0.5f)),
-                            modifier = Modifier.height(28.dp)
-                        )
+                        Icon(Icons.Default.Edit, "Editar", tint = Color.Gray, modifier = Modifier.size(14.dp))
                     }
                 }
 
@@ -394,10 +364,11 @@ fun HomeScreen(
             }
         }
 
-        // FAB simple — publicar platillo (las demás opciones están en el menú y top bar)
+        // FAB — color refleja si el negocio está abierto o cerrado
+        val fabColor = if (negocioAbierto) GreenBtn else RedCancel
         FloatingActionButton(
             onClick = onPublicar,
-            containerColor = GreenBtn,
+            containerColor = fabColor,
             contentColor = Color.White,
             shape = CircleShape,
             modifier = Modifier.align(Alignment.BottomEnd)
@@ -430,10 +401,10 @@ fun HomeScreen(
                     Box(modifier = Modifier.size(52.dp).clip(CircleShape).background(DarkSurface),
                         contentAlignment = Alignment.Center) {
                         if (usuario?.fotoPerfil?.isNotEmpty() == true) {
-                            AsyncImage(model = usuario.fotoPerfil, contentDescription = null,
+                            AsyncImage(model = usuario.fotoPerfil, contentDescription = "Imagen",
                                 modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
                         } else {
-                            Icon(Icons.Default.Person, null, tint = Color.White, modifier = Modifier.size(28.dp))
+                            Icon(Icons.Default.Person, "Perfil", tint = Color.White, modifier = Modifier.size(28.dp))
                         }
                     }
                     Spacer(modifier = Modifier.width(12.dp))
@@ -456,6 +427,34 @@ fun HomeScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text("VENDEDOR", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Toggle abrir/cerrar negocio
+                Row(modifier = Modifier.fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (negocioAbierto) GreenBtn.copy(alpha = 0.15f) else RedCancel.copy(alpha = 0.15f))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (negocioAbierto) "🟢" else "🔴", fontSize = 14.sp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            if (negocioAbierto) "Negocio abierto" else "Negocio cerrado",
+                            color = if (negocioAbierto) GreenBtn else RedCancel,
+                            fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Switch(
+                        checked = negocioAbierto,
+                        onCheckedChange = { vm.toggleNegocioAbierto(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = GreenBtn,
+                            uncheckedThumbColor = Color.White,
+                            uncheckedTrackColor = RedCancel.copy(alpha = 0.5f)),
+                        modifier = Modifier.height(24.dp)
+                    )
+                }
                 Spacer(modifier = Modifier.height(6.dp))
                 MenuOpcion(Icons.Default.Add, "Publicar platillo") { menuAbierto = false; onPublicar() }
                 MenuOpcion(Icons.Default.List, "Pedidos recibidos") { menuAbierto = false; onPedidosVendedor() }
@@ -496,7 +495,8 @@ fun HomeScreen(
 @Composable
 fun BadgeNumero(numero: Int, color: Color, modifier: Modifier = Modifier) {
     Box(modifier = modifier.defaultMinSize(minWidth = 16.dp, minHeight = 16.dp)
-        .clip(CircleShape).background(color).padding(horizontal = 3.dp),
+        .clip(CircleShape).background(color).padding(horizontal = 3.dp)
+        .semantics { contentDescription = "$numero pendientes" },
         contentAlignment = Alignment.Center) {
         Text(if (numero > 99) "99+" else "$numero", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
     }
@@ -517,7 +517,12 @@ fun PedidoActivoCard(pedido: Pedido, esDeVendedor: Boolean, onClick: () -> Unit,
         nombres.joinToString() + extra
     }
 
-    Card(modifier = Modifier.width(210.dp).clickable { onClick() }, shape = RoundedCornerShape(14.dp),
+    val cardDesc = "${info.label}: ${if (esDeVendedor) "pedido de ${pedido.nombreCliente}" else "pedido a ${pedido.nombreVendedor}"}, ${resumen}, ${String.format("%.0f", pedido.total)} pesos"
+
+    Card(modifier = Modifier.width(210.dp)
+        .clickable(onClickLabel = "Ver detalle del pedido") { onClick() }
+        .semantics(mergeDescendants = true) { contentDescription = cardDesc },
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = info.color.copy(alpha = 0.10f)),
         border = if (esListo)
             androidx.compose.foundation.BorderStroke(2.dp, info.color.copy(alpha = borderAlpha))
@@ -551,7 +556,7 @@ fun PedidoActivoCard(pedido: Pedido, esDeVendedor: Boolean, onClick: () -> Unit,
                 }
                 IconButton(onClick = onChat, modifier = Modifier.size(32.dp).clip(CircleShape)
                     .background(info.color.copy(alpha = 0.25f))) {
-                    Icon(Icons.Default.ChatBubble, null, tint = info.color, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.ChatBubble, "Chat", tint = info.color, modifier = Modifier.size(16.dp))
                 }
             }
         }
@@ -560,7 +565,10 @@ fun PedidoActivoCard(pedido: Pedido, esDeVendedor: Boolean, onClick: () -> Unit,
 
 @Composable
 fun ProductoPopularCard(producto: Producto, onClick: () -> Unit) {
-    Card(modifier = Modifier.width(160.dp).clickable { onClick() }, shape = RoundedCornerShape(16.dp),
+    val ratingDesc = if (producto.rating > 0) "${String.format("%.1f", producto.rating)} estrellas" else "sin calificación"
+    Card(modifier = Modifier.width(160.dp).clickable(onClickLabel = "Ver ${producto.nombre}") { onClick() }
+        .semantics(mergeDescendants = true) {},
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = DarkSurface)) {
         Column {
             Box {
@@ -601,7 +609,10 @@ fun ProductoPopularCard(producto: Producto, onClick: () -> Unit) {
 
 @Composable
 fun ProductoMiniCard(producto: Producto, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Card(modifier = modifier.padding(vertical = 6.dp).clickable { onClick() }, shape = RoundedCornerShape(16.dp),
+    Card(modifier = modifier.padding(vertical = 6.dp)
+        .clickable(onClickLabel = "Ver ${producto.nombre}") { onClick() }
+        .semantics(mergeDescendants = true) {},
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = DarkSurface)) {
         Column {
             Box {

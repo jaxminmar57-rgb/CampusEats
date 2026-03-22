@@ -98,7 +98,7 @@ fun CategoriaScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onVolver) {
-                    Icon(Icons.Default.ArrowBack, null, tint = Color.White)
+                    Icon(Icons.Default.ArrowBack, "Volver", tint = Color.White)
                 }
                 Text(
                     text = categoria,
@@ -236,7 +236,7 @@ fun ProductoCard(
 
                 // Rating
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Star, null, tint = GoldStar, modifier = Modifier.size(14.dp))
+                    Icon(Icons.Default.Star, "Calificación", tint = GoldStar, modifier = Modifier.size(14.dp))
                     val catRating = if (producto.rating > 0) String.format("%.1f", producto.rating) else "-"
                     Text(
                         " $catRating (${producto.numResenas} reseñas)",
@@ -270,7 +270,7 @@ fun ProductoCard(
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier.height(42.dp)
                         ) {
-                            Icon(Icons.Default.Store, null, tint = GreenBtn, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Store, "Tienda", tint = GreenBtn, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("Tienda", color = GreenBtn, fontSize = 13.sp)
                         }

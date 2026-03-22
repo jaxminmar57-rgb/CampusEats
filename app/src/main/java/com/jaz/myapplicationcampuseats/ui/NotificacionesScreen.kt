@@ -52,7 +52,7 @@ fun NotificacionesScreen(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onVolver) {
-                    Icon(Icons.Default.ArrowBack, null, tint = Color.White)
+                    Icon(Icons.Default.ArrowBack, "Volver", tint = Color.White)
                 }
                 Text("Notificaciones", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 if (noLeidas > 0) {
@@ -157,7 +157,7 @@ fun NotificacionCard(notif: NotificacionApp, onClick: () -> Unit, onEliminar: ()
             Box(modifier = Modifier.width(3.dp).height(40.dp).clip(RoundedCornerShape(2.dp))
                 .background(if (!notif.leida) accentColor else Color.Transparent))
             IconButton(onClick = onEliminar, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Default.Close, null, tint = Color.Gray.copy(alpha = 0.5f), modifier = Modifier.size(14.dp))
+                Icon(Icons.Default.Close, "Cerrar", tint = Color.Gray.copy(alpha = 0.5f), modifier = Modifier.size(14.dp))
             }
         }
     }

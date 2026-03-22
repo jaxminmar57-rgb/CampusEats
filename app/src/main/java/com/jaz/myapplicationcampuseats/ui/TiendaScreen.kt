@@ -99,14 +99,14 @@ fun TiendaScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onVolver) {
-                    Icon(Icons.Default.ArrowBack, null, tint = Color.White)
+                    Icon(Icons.Default.ArrowBack, "Volver", tint = Color.White)
                 }
                 Text(tienda?.nombreVendedor ?: "Tienda", color = Color.White,
                     fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 // Carrito con badge en tiempo real
                 Box {
                     IconButton(onClick = onCarrito) {
-                        Icon(Icons.Default.ShoppingCart, null, tint = Color.White)
+                        Icon(Icons.Default.ShoppingCart, "Carrito", tint = Color.White)
                     }
                     if (carritoCount > 0) {
                         BadgeNumero(
@@ -145,11 +145,11 @@ fun TiendaScreen(
                                     .background(DarkSurface2).clickable { onVerPerfil(t.vendedorId) },
                                     contentAlignment = Alignment.Center) {
                                     if (t.fotoPerfil.isNotEmpty()) {
-                                        AsyncImage(model = t.fotoPerfil, contentDescription = null,
+                                        AsyncImage(model = t.fotoPerfil, contentDescription = "Imagen",
                                             modifier = Modifier.fillMaxSize().clip(CircleShape),
                                             contentScale = ContentScale.Crop)
                                     } else {
-                                        Icon(Icons.Default.Store, null, tint = Color.White, modifier = Modifier.size(32.dp))
+                                        Icon(Icons.Default.Store, "Tienda", tint = Color.White, modifier = Modifier.size(32.dp))
                                     }
                                 }
                                 Spacer(modifier = Modifier.width(14.dp))
@@ -168,7 +168,7 @@ fun TiendaScreen(
                                     }
                                 }
                                 IconButton(onClick = { onVerPerfil(t.vendedorId) }) {
-                                    Icon(Icons.Default.Person, null, tint = GreenBtn, modifier = Modifier.size(22.dp))
+                                    Icon(Icons.Default.Person, "Perfil", tint = GreenBtn, modifier = Modifier.size(22.dp))
                                 }
                             }
 
@@ -207,7 +207,7 @@ fun TiendaScreen(
                         colors = CardDefaults.cardColors(containerColor = DarkSurface)) {
                         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             if (producto.imagenUrl.isNotEmpty()) {
-                                AsyncImage(model = producto.imagenUrl, contentDescription = null,
+                                AsyncImage(model = producto.imagenUrl, contentDescription = "Imagen",
                                     modifier = Modifier.size(72.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Crop)
                             } else {
                                 Box(modifier = Modifier.size(72.dp).background(DarkSurface2, RoundedCornerShape(12.dp)),
@@ -249,7 +249,7 @@ fun TiendaScreen(
                                 },
                                 containerColor = GreenBtn, contentColor = Color.White,
                                 shape = CircleShape, modifier = Modifier.size(38.dp)
-                            ) { Icon(Icons.Default.Add, null, modifier = Modifier.size(20.dp)) }
+                            ) { Icon(Icons.Default.Add, "Agregar", modifier = Modifier.size(20.dp)) }
                         }
                     }
                 }

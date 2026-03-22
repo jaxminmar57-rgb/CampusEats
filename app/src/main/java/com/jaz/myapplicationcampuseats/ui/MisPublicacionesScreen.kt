@@ -57,7 +57,7 @@ fun MisPublicacionesScreen(
 
     Column(modifier = Modifier.fillMaxSize().background(DarkBg)) {
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onVolver) { Icon(Icons.Default.ArrowBack, null, tint = Color.White) }
+            IconButton(onClick = onVolver) { Icon(Icons.Default.ArrowBack, "Volver", tint = Color.White) }
             Text("Mis publicaciones", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             if (productos.isNotEmpty()) Text("${productos.size}", color = Color.Gray, fontSize = 14.sp)
         }
@@ -117,7 +117,7 @@ fun MiProductoCard(
             Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.Top) {
                 // Imagen
                 if (producto.imagenUrl.isNotEmpty()) {
-                    AsyncImage(model = producto.imagenUrl, contentDescription = null,
+                    AsyncImage(model = producto.imagenUrl, contentDescription = "Imagen",
                         modifier = Modifier.size(72.dp).clip(RoundedCornerShape(10.dp)), contentScale = ContentScale.Crop)
                 } else {
                     Box(modifier = Modifier.size(72.dp).background(DarkSurface2, RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
@@ -167,7 +167,7 @@ fun MiProductoCard(
                 // Editar
                 if (onEditar != null) {
                     TextButton(onClick = onEditar) {
-                        Icon(Icons.Default.Edit, null, modifier = Modifier.size(16.dp), tint = GreenBtn)
+                        Icon(Icons.Default.Edit, "Editar", modifier = Modifier.size(16.dp), tint = GreenBtn)
                         Spacer(Modifier.width(4.dp))
                         Text("Editar", color = GreenBtn, fontSize = 13.sp)
                     }
@@ -189,14 +189,14 @@ fun MiProductoCard(
                         Text("${producto.cantidadDisponible}", color = Color.White, fontSize = 14.sp,
                             fontWeight = FontWeight.Bold, modifier = Modifier.widthIn(min = 24.dp))
                         IconButton(onClick = onAgregarStock, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.Add, null, tint = GreenBtn, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.Add, "Agregar", tint = GreenBtn, modifier = Modifier.size(18.dp))
                         }
                     }
                 }
 
                 // Eliminar
                 IconButton(onClick = onEliminar, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.Delete, null, tint = RedCancel, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Delete, "Eliminar", tint = RedCancel, modifier = Modifier.size(18.dp))
                 }
             }
         }

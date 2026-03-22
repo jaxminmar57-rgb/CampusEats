@@ -84,7 +84,7 @@ fun PublicarScreen(
 
     Column(modifier = Modifier.fillMaxSize().background(DarkBg).verticalScroll(rememberScrollState())) {
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onVolver) { Icon(Icons.Default.ArrowBack, null, tint = Color.White) }
+            IconButton(onClick = onVolver) { Icon(Icons.Default.ArrowBack, "Volver", tint = Color.White) }
             Text(if (modoEdicion) "Editar platillo" else "Publicar platillo", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
 
@@ -95,7 +95,7 @@ fun PublicarScreen(
             Spacer(Modifier.height(8.dp))
             val imagenMostrar: Any? = imagenUri ?: productoExistente?.imagenUrl?.takeIf { it.isNotEmpty() }
             if (imagenMostrar != null) {
-                AsyncImage(model = imagenMostrar, contentDescription = null,
+                AsyncImage(model = imagenMostrar, contentDescription = "Imagen",
                     modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Crop)
                 Spacer(Modifier.height(8.dp))
             }

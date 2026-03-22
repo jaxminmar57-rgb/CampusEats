@@ -111,7 +111,7 @@ fun AjustesScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onVolver) {
-                Icon(Icons.Default.ArrowBack, null, tint = Color.White)
+                Icon(Icons.Default.ArrowBack, "Volver", tint = Color.White)
             }
             Text("Ajustes", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
@@ -131,12 +131,12 @@ fun AjustesScreen(
                     if (usuario?.fotoPerfil?.isNotEmpty() == true) {
                         AsyncImage(
                             model = usuario.fotoPerfil,
-                            contentDescription = null,
+                            contentDescription = "Imagen",
                             modifier = Modifier.fillMaxSize().clip(CircleShape),
                             contentScale = ContentScale.Crop
                         )
                     } else {
-                        Icon(Icons.Default.Person, null, tint = Color.White, modifier = Modifier.size(36.dp))
+                        Icon(Icons.Default.Person, "Perfil", tint = Color.White, modifier = Modifier.size(36.dp))
                     }
                     if (subiendoFoto) {
                         Box(
@@ -274,7 +274,7 @@ fun AjustesScreen(
                 onValueChange = { ubicacionDescripcion = it; guardado = false },
                 label = { Text("Descripción de tu ubicación (opcional)", color = Color.Gray) },
                 placeholder = { Text("Ej: Cafetería principal, planta baja", color = Color.Gray) },
-                leadingIcon = { Icon(Icons.Default.LocationOn, null, tint = Color.Gray) },
+                leadingIcon = { Icon(Icons.Default.LocationOn, "Ubicación", tint = Color.Gray) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(10.dp),
                 colors = camposColores(),
@@ -349,7 +349,7 @@ fun AjustesScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(bottom = 10.dp)
                     ) {
-                        Icon(Icons.Default.CheckCircle, null, tint = GreenBtn, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.CheckCircle, "Confirmar", tint = GreenBtn, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Cambios guardados", color = GreenBtn, fontSize = 14.sp)
                     }
@@ -393,7 +393,7 @@ fun AjustesScreen(
                     if (guardando) {
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp))
                     } else {
-                        Icon(Icons.Default.Save, null, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Save, "Guardar", modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Guardar cambios", fontWeight = FontWeight.Bold)
                     }
@@ -416,7 +416,7 @@ fun AjustesScreen(
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = RedCancel)
                 ) {
-                    Icon(Icons.Default.ExitToApp, null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.ExitToApp, "Salir", modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Cerrar sesión", fontWeight = FontWeight.Bold)
                 }
@@ -433,7 +433,7 @@ fun AjustesScreen(
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = RedCancel)
                 ) {
-                    Icon(Icons.Default.DeleteForever, null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.DeleteForever, "Eliminar", modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Eliminar mi cuenta", fontWeight = FontWeight.Bold)
                 }

@@ -49,7 +49,7 @@ fun HistorialScreen(
     Column(modifier = Modifier.fillMaxSize().background(DarkBg)) {
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onVolver) { Icon(Icons.Default.ArrowBack, null, tint = Color.White) }
+            IconButton(onClick = onVolver) { Icon(Icons.Default.ArrowBack, "Volver", tint = Color.White) }
             Text("Mis pedidos", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -138,7 +138,7 @@ fun PedidoClienteCard(pedido: Pedido, onClick: () -> Unit, onChat: (() -> Unit)?
                     Row {
                         if (onChat != null) {
                             IconButton(onClick = onChat, modifier = Modifier.size(32.dp)) {
-                                Icon(Icons.Default.ChatBubble, null, tint = GreenBtn, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.ChatBubble, "Chat", tint = GreenBtn, modifier = Modifier.size(18.dp))
                             }
                         }
                         Icon(Icons.Default.ArrowForward, null, tint = Color.Gray, modifier = Modifier.size(18.dp))
@@ -175,7 +175,7 @@ fun PedidosVendedorScreen(
     Column(modifier = Modifier.fillMaxSize().background(DarkBg)) {
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onVolver) { Icon(Icons.Default.ArrowBack, null, tint = Color.White) }
+            IconButton(onClick = onVolver) { Icon(Icons.Default.ArrowBack, "Volver", tint = Color.White) }
             Text("Pedidos recibidos", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             val pendientes = pedidos.count { it.estado == "pendiente" }
             if (pendientes > 0) {
@@ -266,7 +266,7 @@ fun PedidoVendedorCard(pedido: Pedido, onClick: () -> Unit, onChat: (() -> Unit)
                     Row {
                         if (onChat != null) {
                             IconButton(onClick = onChat, modifier = Modifier.size(32.dp)) {
-                                Icon(Icons.Default.ChatBubble, null, tint = GreenBtn, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.ChatBubble, "Chat", tint = GreenBtn, modifier = Modifier.size(18.dp))
                             }
                         }
                         Icon(Icons.Default.ArrowForward, null, tint = Color.Gray, modifier = Modifier.size(18.dp))

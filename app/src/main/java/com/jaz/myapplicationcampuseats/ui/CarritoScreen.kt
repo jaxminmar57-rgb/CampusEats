@@ -72,7 +72,7 @@ fun CarritoScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onVolver) {
-                Icon(Icons.Default.ArrowBack, null, tint = Color.White)
+                Icon(Icons.Default.ArrowBack, "Volver", tint = Color.White)
             }
             Text("Mi carrito", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.weight(1f))
@@ -163,7 +163,7 @@ fun CarritoScreen(
                                 infoVendedor?.ubicacionDescripcion?.isNotEmpty() == true) {
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.LocationOn, null, tint = OrangeWarn,
+                                    Icon(Icons.Default.LocationOn, "Ubicación", tint = OrangeWarn,
                                         modifier = Modifier.size(14.dp))
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(infoVendedor.ubicacionDescripcion,
@@ -310,7 +310,7 @@ fun ItemCarritoCard(item: ItemCarrito, onEliminar: () -> Unit, onCantidadCambio:
                     }
                     Text("${item.cantidad}", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     IconButton(onClick = { onCantidadCambio(item.cantidad + 1) }, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.Add, null, tint = GreenBtn, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Add, "Agregar", tint = GreenBtn, modifier = Modifier.size(18.dp))
                     }
                 }
             }

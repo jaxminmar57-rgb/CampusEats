@@ -15,6 +15,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -111,7 +114,7 @@ fun PedidoDetalleScreen(
     Column(modifier = Modifier.fillMaxSize().background(DarkBg)) {
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onVolver) { Icon(Icons.Default.ArrowBack, null, tint = Color.White) }
+            IconButton(onClick = onVolver) { Icon(Icons.Default.ArrowBack, "Volver", tint = Color.White) }
             Column(modifier = Modifier.weight(1f)) {
                 Text("Detalle del pedido", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Text(p.id.take(12) + "...", color = Color.Gray, fontSize = 11.sp)
@@ -191,7 +194,7 @@ fun PedidoDetalleScreen(
                                 Text(if (esVendedor) p.nombreCliente else p.nombreVendedor,
                                     color = GreenBtn, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Icon(Icons.Default.Person, null, tint = GreenBtn, modifier = Modifier.size(14.dp))
+                                Icon(Icons.Default.Person, "Perfil", tint = GreenBtn, modifier = Modifier.size(14.dp))
                             }
                         }
                         HorizontalDivider(color = Color.White.copy(alpha = 0.07f), modifier = Modifier.padding(vertical = 2.dp))
@@ -210,7 +213,7 @@ fun PedidoDetalleScreen(
                         colors = CardDefaults.cardColors(containerColor = OrangeWarn.copy(alpha = 0.12f)),
                         border = androidx.compose.foundation.BorderStroke(1.dp, OrangeWarn.copy(alpha = 0.4f))) {
                         Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.LocationOn, null, tint = OrangeWarn, modifier = Modifier.size(24.dp))
+                            Icon(Icons.Default.LocationOn, "Ubicación", tint = OrangeWarn, modifier = Modifier.size(24.dp))
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
                                 Text("📍 Ubicación del vendedor", color = OrangeWarn, fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -289,7 +292,7 @@ fun PedidoDetalleScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = GreenBtn),
                         enabled = !procesando
                     ) {
-                        Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Default.CheckCircle, "Confirmar", modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(textoBoton, fontWeight = FontWeight.Bold)
                     }
@@ -338,7 +341,9 @@ fun PedidoDetalleScreen(
 @Composable
 fun EstadoPedidoCard(estado: String) {
     val info = estadoInfo(estado)
-    Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(info.color).padding(16.dp)) {
+    val desc = "Estado del pedido: ${info.label}. ${descripcionEstado(estado)}"
+    Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(info.color).padding(16.dp)
+        .semantics(mergeDescendants = true) { contentDescription = desc }) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(info.emoji, fontSize = 32.sp)
             Spacer(modifier = Modifier.width(12.dp))

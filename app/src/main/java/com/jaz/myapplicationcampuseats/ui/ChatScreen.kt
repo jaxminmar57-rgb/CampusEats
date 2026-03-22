@@ -116,7 +116,7 @@ fun ChatScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onVolver) {
-                    Icon(Icons.Default.ArrowBack, null, tint = Color.White)
+                    Icon(Icons.Default.ArrowBack, "Volver", tint = Color.White)
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(otroNombre, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
@@ -283,7 +283,7 @@ fun ChatScreen(
                     .background(if (texto.isBlank()) DarkSurface else GreenBtn, CircleShape),
                 enabled = texto.isNotBlank() && !enviando
             ) {
-                Icon(Icons.Default.Send, null, tint = Color.White)
+                Icon(Icons.Default.Send, "Enviar", tint = Color.White)
             }
         }
         } // else chatBloqueado

@@ -70,7 +70,7 @@ fun PerfilUsuarioScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onVolver) {
-                Icon(Icons.Default.ArrowBack, null, tint = Color.White)
+                Icon(Icons.Default.ArrowBack, "Volver", tint = Color.White)
             }
             Text(
                 "Perfil",
@@ -81,7 +81,7 @@ fun PerfilUsuarioScreen(
             )
             if (onVerTienda != null) {
                 IconButton(onClick = { onVerTienda(uid) }) {
-                    Icon(Icons.Default.Store, null, tint = GreenBtn)
+                    Icon(Icons.Default.Store, "Tienda", tint = GreenBtn)
                 }
             }
         }
@@ -121,12 +121,12 @@ fun PerfilUsuarioScreen(
                             if (u.fotoPerfil.isNotEmpty()) {
                                 AsyncImage(
                                     model = u.fotoPerfil,
-                                    contentDescription = null,
+                                    contentDescription = "Imagen",
                                     modifier = Modifier.fillMaxSize().clip(CircleShape),
                                     contentScale = ContentScale.Crop
                                 )
                             } else {
-                                Icon(Icons.Default.Person, null, tint = Color.White, modifier = Modifier.size(48.dp))
+                                Icon(Icons.Default.Person, "Perfil", tint = Color.White, modifier = Modifier.size(48.dp))
                             }
                         }
 

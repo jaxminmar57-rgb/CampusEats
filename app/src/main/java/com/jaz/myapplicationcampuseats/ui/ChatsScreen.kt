@@ -48,7 +48,7 @@ fun ChatsScreen(
     Column(modifier = Modifier.fillMaxSize().background(DarkBg)) {
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onVolver) { Icon(Icons.Default.ArrowBack, null, tint = Color.White) }
+            IconButton(onClick = onVolver) { Icon(Icons.Default.ArrowBack, "Volver", tint = Color.White) }
             Text("Chats", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             if (totalNuevos > 0) { BadgeNumero(numero = totalNuevos, color = RedCancel); Spacer(modifier = Modifier.width(8.dp)) }
         }

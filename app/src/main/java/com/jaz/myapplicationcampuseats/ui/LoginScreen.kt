@@ -92,7 +92,7 @@ fun LoginScreen(
             value = password,
             onValueChange = { password = it; error = "" },
             label = { Text("Contraseña", color = Color.Gray) },
-            leadingIcon = { Icon(Icons.Default.Lock, null, tint = Color.Gray) },
+            leadingIcon = { Icon(Icons.Default.Lock, "Contraseña", tint = Color.Gray) },
             trailingIcon = {
                 IconButton(onClick = { verPassword = !verPassword }) {
                     Icon(

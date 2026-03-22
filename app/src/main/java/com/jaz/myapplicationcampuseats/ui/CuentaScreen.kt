@@ -51,7 +51,7 @@ fun CuentaScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onVolver) {
-                Icon(Icons.Default.ArrowBack, null, tint = Color.White)
+                Icon(Icons.Default.ArrowBack, "Volver", tint = Color.White)
             }
             Text("Mi Cuenta", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
@@ -68,11 +68,11 @@ fun CuentaScreen(
                 if (usuario?.fotoPerfil?.isNotEmpty() == true) {
                     AsyncImage(
                         model = usuario.fotoPerfil,
-                        contentDescription = null,
+                        contentDescription = "Imagen",
                         modifier = Modifier.fillMaxSize().clip(CircleShape)
                     )
                 } else {
-                    Icon(Icons.Default.Person, null, tint = Color.White, modifier = Modifier.size(50.dp))
+                    Icon(Icons.Default.Person, "Perfil", tint = Color.White, modifier = Modifier.size(50.dp))
                 }
             }
             Spacer(modifier = Modifier.height(10.dp))
@@ -153,7 +153,7 @@ fun InfoFila(label: String, valor: String) {
 @Composable
 fun RatingDisplay(rating: Double, numResenas: Int) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Default.Star, null, tint = GoldStar, modifier = Modifier.size(18.dp))
+        Icon(Icons.Default.Star, "Calificación", tint = GoldStar, modifier = Modifier.size(18.dp))
         Spacer(modifier = Modifier.width(4.dp))
         Text(
             String.format("%.1f", rating),

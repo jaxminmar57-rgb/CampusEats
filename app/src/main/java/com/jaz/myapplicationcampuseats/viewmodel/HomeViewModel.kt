@@ -36,6 +36,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         private set
     var notifNoLeidas by mutableStateOf(0)
         private set
+    var negocioAbierto by mutableStateOf(false)
+        private set
 
     val mensajesNuevosMapa = mutableStateMapOf<String, Int>()
     val ultimoLeido = mutableStateMapOf<String, Long>()
@@ -94,6 +96,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         listeners += NotificacionesRepository.escucharNotificaciones(uid) { lista ->
             notifNoLeidas = lista.count { !it.leida && it.tipo != "chat" }
         }
+
+        // Estado de mi negocio (reactivo)
+        listeners += FirebaseFirestore.getInstance().collection("usuarios").document(uid)
+            .addSnapshotListener { snap, _ ->
+                negocioAbierto = snap?.getBoolean("negocioAbierto") ?: false
+            }
     }
 
     // ── Chat listeners (se recrean cuando cambian pedidos activos) ────────────
@@ -122,6 +130,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleNegocioAbierto(nuevoEstado: Boolean, onSuccess: () -> Unit = {}) {
         if (uid.isEmpty()) return
+        negocioAbierto = nuevoEstado // Actualización inmediata en la UI
         FirebaseFirestore.getInstance().collection("usuarios").document(uid)
             .update("negocioAbierto", nuevoEstado)
             .addOnSuccessListener { onSuccess() }

@@ -76,7 +76,7 @@ fun RegistroScreen(
 
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onVolver) {
-                Icon(Icons.Default.ArrowBack, null, tint = Color.White)
+                Icon(Icons.Default.ArrowBack, "Volver", tint = Color.White)
             }
             Text("Crear cuenta", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
@@ -95,7 +95,7 @@ fun RegistroScreen(
             contentAlignment = Alignment.Center
         ) {
             if (fotoUri != null) {
-                AsyncImage(model = fotoUri, contentDescription = null,
+                AsyncImage(model = fotoUri, contentDescription = "Imagen",
                     modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
             } else {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -127,7 +127,7 @@ fun RegistroScreen(
         // Nombre
         OutlinedTextField(value = nombre, onValueChange = { nombre = it; error = "" },
             label = { Text("Nombre completo *", color = Color.Gray) },
-            leadingIcon = { Icon(Icons.Default.Person, null, tint = Color.Gray) },
+            leadingIcon = { Icon(Icons.Default.Person, "Perfil", tint = Color.Gray) },
             modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
             colors = camposColores(), singleLine = true)
 
@@ -220,7 +220,7 @@ fun RegistroScreen(
         // Contraseña
         OutlinedTextField(value = password, onValueChange = { password = it; error = "" },
             label = { Text("Contraseña *", color = Color.Gray) },
-            leadingIcon = { Icon(Icons.Default.Lock, null, tint = Color.Gray) },
+            leadingIcon = { Icon(Icons.Default.Lock, "Contraseña", tint = Color.Gray) },
             trailingIcon = { IconButton(onClick = { verPassword = !verPassword }) {
                 Icon(if (verPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility, null, tint = Color.Gray) } },
             visualTransformation = if (verPassword) VisualTransformation.None else PasswordVisualTransformation(),
@@ -232,7 +232,7 @@ fun RegistroScreen(
 
         OutlinedTextField(value = confirmar, onValueChange = { confirmar = it; error = "" },
             label = { Text("Confirmar contraseña *", color = Color.Gray) },
-            leadingIcon = { Icon(Icons.Default.Lock, null, tint = Color.Gray) },
+            leadingIcon = { Icon(Icons.Default.Lock, "Contraseña", tint = Color.Gray) },
             visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
