@@ -20,6 +20,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val titulo    = remoteMessage.notification?.title ?: data["titulo"] ?: "CampusEats"
         val cuerpo    = remoteMessage.notification?.body  ?: data["cuerpo"] ?: ""
         val otroNombre = data["otroNombre"] ?: ""
+        val estado    = data["estado"] ?: ""
 
         // Suprimir notificación de chat si el usuario ya está en ese chat
         if (tipo == "chat" && pedidoId.isNotEmpty()) {
@@ -31,24 +32,34 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         NotificationHelper.crearCanales(applicationContext)
 
         when (tipo) {
-            "pedido" -> NotificationHelper.mostrarNotificacionPedido(
-                context    = applicationContext,
-                pedidoId   = pedidoId,
-                titulo     = titulo,
-                mensaje    = cuerpo,
-                otroNombre = otroNombre
-            )
-            "chat" -> NotificationHelper.mostrarNotificacionChat(
-                context   = applicationContext,
-                pedidoId  = pedidoId,
-                remitente = otroNombre,
-                mensaje   = cuerpo
-            )
+            "pedido" -> {
+                NotificationHelper.mostrarNotificacionPedido(
+                    context    = applicationContext,
+                    pedidoId   = pedidoId,
+                    titulo     = titulo,
+                    mensaje    = cuerpo,
+                    otroNombre = otroNombre,
+                    estado     = estado
+                )
+                // Sonido extra si es nuevo pedido para vendedor
+                if (estado == "pendiente" || estado.isEmpty()) {
+                    SoundManager.playNuevoPedido(applicationContext)
+                }
+            }
+            "chat" -> {
+                NotificationHelper.mostrarNotificacionChat(
+                    context   = applicationContext,
+                    pedidoId  = pedidoId,
+                    remitente = otroNombre,
+                    mensaje   = cuerpo
+                )
+            }
             else -> NotificationHelper.mostrarNotificacionPedido(
                 context  = applicationContext,
                 pedidoId = pedidoId,
                 titulo   = titulo,
-                mensaje  = cuerpo
+                mensaje  = cuerpo,
+                estado   = estado
             )
         }
     }

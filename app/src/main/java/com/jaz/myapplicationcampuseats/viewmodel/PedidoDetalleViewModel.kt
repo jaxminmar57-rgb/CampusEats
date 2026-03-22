@@ -58,10 +58,10 @@ class PedidoDetalleViewModel : ViewModel() {
         }
     }
 
-    fun cambiarEstado(nuevoEstado: String) {
+    fun cambiarEstado(nuevoEstado: String, uid: String = "") {
         procesando = true
         estadoEsperado = nuevoEstado
-        PedidoRepository.cambiarEstado(pedidoIdActual, nuevoEstado,
+        PedidoRepository.cambiarEstado(pedidoIdActual, nuevoEstado, canceladoPorUid = uid,
             onError = { procesando = false; estadoEsperado = null }
         )
     }

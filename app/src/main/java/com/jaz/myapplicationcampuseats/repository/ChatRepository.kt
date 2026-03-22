@@ -47,7 +47,7 @@ object ChatRepository {
             .addSnapshotListener { snapshot, _ ->
                 val mensajes = snapshot?.documents?.mapNotNull {
                     it.toObject(MensajeChat::class.java)
-                } ?: emptyList()
+                }?.sortedWith(compareBy({ it.timestamp }, { it.id })) ?: emptyList()
                 onUpdate(mensajes)
             }
     }

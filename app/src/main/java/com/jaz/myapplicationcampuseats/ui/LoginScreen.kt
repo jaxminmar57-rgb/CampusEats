@@ -38,6 +38,7 @@ fun LoginScreen(
     var verPassword by remember { mutableStateOf(false) }
     var cargando by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
+    val loginCtx = androidx.compose.ui.platform.LocalContext.current
 
     Column(
         modifier = Modifier
@@ -136,6 +137,7 @@ fun LoginScreen(
                     password = password,
                     onSuccess = { usuario ->
                         cargando = false
+                        com.jaz.myapplicationcampuseats.service.SoundManager.playExito(loginCtx)
                         onEntrar(usuario)
                     },
                     onError = { msg ->

@@ -164,7 +164,8 @@ fun AppNavigation(
                 onChats = { navController.navigateSafe(Routes.CHATS) },
                 onAbrirPedido = { pedidoId -> navController.navigateSafe(Routes.pedidoDetalle(pedidoId)) },
                 onAbrirChat = { pedidoId, otroNombre -> navController.navigateSafe(Routes.chat(pedidoId, otroNombre)) },
-                onVerTienda = { vendedorId -> navController.navigateSafe(Routes.tienda(vendedorId)) }
+                onVerTienda = { vendedorId -> navController.navigateSafe(Routes.tienda(vendedorId)) },
+                onVerPerfil = { uid -> navController.navigateSafe(Routes.perfil(uid)) }
             )
         }
 

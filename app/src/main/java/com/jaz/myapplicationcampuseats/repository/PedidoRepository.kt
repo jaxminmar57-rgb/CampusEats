@@ -46,11 +46,14 @@ object PedidoRepository {
         }
     }
 
-    fun cambiarEstado(pedidoId: String, nuevoEstado: String, onSuccess: () -> Unit = {}, onError: (String) -> Unit = {}) {
+    fun cambiarEstado(pedidoId: String, nuevoEstado: String, canceladoPorUid: String = "", onSuccess: () -> Unit = {}, onError: (String) -> Unit = {}) {
         pedidosRef.document(pedidoId).update("estado", nuevoEstado).addOnSuccessListener {
             pedidosRef.document(pedidoId).get().addOnSuccessListener { doc ->
                 val p = doc.toObject(Pedido::class.java) ?: return@addOnSuccessListener
-                FcmRepository.notificarCambioEstado(p.clienteId, p.nombreVendedor, pedidoId, nuevoEstado)
+                // Determinar a quién notificar (la OTRA parte)
+                val destinatarioId = if (canceladoPorUid == p.clienteId) p.vendedorId else p.clienteId
+                val nombreRemitente = if (canceladoPorUid == p.clienteId) p.nombreCliente else p.nombreVendedor
+                FcmRepository.notificarCambioEstado(destinatarioId, nombreRemitente, pedidoId, nuevoEstado)
             }
             onSuccess()
         }.addOnFailureListener { onError(it.message ?: "Error") }

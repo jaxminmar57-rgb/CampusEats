@@ -29,10 +29,16 @@ import com.jaz.myapplicationcampuseats.repository.ImageRepository
 import com.jaz.myapplicationcampuseats.repository.ProductoRepository
 
 val categoriasLista = listOf(
-    "Hamburguesas", "Pizza", "Pastas", "Bebidas", "Ensaladas", "Burritos",
-    "Sandwich", "Tacos", "Tortas", "Quesadillas", "Hot Dogs", "Sushi",
-    "Alitas", "Postres", "Snacks", "Desayunos", "Comida Corrida", "Mariscos",
-    "Antojitos", "Saludable", "Café", "Otros"
+    "Hamburguesas", "Pizza", "Hot Dogs", "Papas Fritas", "Sandwich", "Alitas",
+    "Tacos", "Burritos", "Tortas", "Quesadillas", "Tamales", "Gorditas",
+    "Chilaquiles", "Enchiladas", "Pozole", "Elotes", "Antojitos",
+    "Sushi", "Pastas", "Ramen", "Comida China", "Comida Árabe",
+    "Comida Corrida", "Mariscos", "Pollo", "Carne Asada", "Costillas",
+    "Desayunos", "Snacks", "Churros", "Esquites", "Fruta",
+    "Bebidas", "Café", "Smoothies", "Aguas Frescas", "Licuados", "Cerveza",
+    "Postres", "Helados", "Pan Dulce", "Galletas", "Pasteles",
+    "Ensaladas", "Saludable", "Vegano", "Bowls",
+    "Otros"
 )
 
 @Composable
@@ -56,6 +62,7 @@ fun PublicarScreen(
     var publicando            by remember { mutableStateOf(false) }
     var error                 by remember { mutableStateOf("") }
     var publicado             by remember { mutableStateOf(false) }
+    val pubCtx = androidx.compose.ui.platform.LocalContext.current
 
     // Stock
     var cantidadStr     by remember {
@@ -246,7 +253,7 @@ fun PublicarScreen(
                                 fun guardarEdicion(url: String) {
                                     if (url.isNotEmpty()) campos["imagenUrl"] = url
                                     ProductoRepository.actualizarProducto(productoExistente!!.id, campos,
-                                        onSuccess = { publicando = false; publicado = true },
+                                        onSuccess = { publicando = false; publicado = true; com.jaz.myapplicationcampuseats.service.SoundManager.playExito(pubCtx) },
                                         onError = { publicando = false; error = "Error: ${it.message}" })
                                 }
                                 if (imagenUri != null) {
@@ -264,7 +271,7 @@ fun PublicarScreen(
                                             categoria = categoriaSeleccionada, vendedorId = userId, nombreVendedor = nombreVendedor,
                                             disponible = true, cantidadDisponible = cantidad, mostrarCantidad = mostrarCantidad && cantidad >= 0,
                                             ubicacionVendedor = ubicacionVendedor, preferenciaEntregaVendedor = preferenciaEntregaVendedor),
-                                        onSuccess = { publicando = false; publicado = true },
+                                        onSuccess = { publicando = false; publicado = true; com.jaz.myapplicationcampuseats.service.SoundManager.playExito(pubCtx) },
                                         onError = { publicando = false; error = "Error: ${it.message}" })
                                 }
                                 if (imagenUri != null) {

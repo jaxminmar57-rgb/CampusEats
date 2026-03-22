@@ -89,7 +89,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val carritoRef = FirebaseFirestore.getInstance()
             .collection("usuarios").document(uid).collection("carrito")
         listeners += carritoRef.addSnapshotListener { snap, _ ->
-            carritoCount = snap?.size() ?: 0
+            carritoCount = snap?.documents?.sumOf {
+                (it.getLong("cantidad") ?: 1L).toInt()
+            } ?: 0
         }
 
         // Notificaciones no leídas

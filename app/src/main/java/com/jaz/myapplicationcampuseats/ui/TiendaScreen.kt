@@ -38,11 +38,10 @@ fun TiendaScreen(
     var snackMsg   by remember { mutableStateOf("") }
     var carritoCount by remember { mutableStateOf(0) }
     val snackState = remember { SnackbarHostState() }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
 
-    // Diálogo de conflicto de vendedor
-    var mostrarDialogoConflicto by remember { mutableStateOf(false) }
-    var vendedorConflicto by remember { mutableStateOf("") }
-    var itemPendiente by remember { mutableStateOf<ItemCarrito?>(null) }
+    // Diálogo de bloqueo (compra propia)
+    var msgBloqueado by remember { mutableStateOf("") }
 
     LaunchedEffect(snackMsg) {
         if (snackMsg.isNotEmpty()) { snackState.showSnackbar(snackMsg); snackMsg = "" }
@@ -57,37 +56,18 @@ fun TiendaScreen(
         if (userId.isEmpty()) return@DisposableEffect onDispose {}
         val ref = com.google.firebase.firestore.FirebaseFirestore.getInstance()
             .collection("usuarios").document(userId).collection("carrito")
-        val listener = ref.addSnapshotListener { snap, _ -> carritoCount = snap?.size() ?: 0 }
+        val listener = ref.addSnapshotListener { snap, _ ->
+            carritoCount = snap?.documents?.sumOf { (it.getLong("cantidad") ?: 1L).toInt() } ?: 0
+        }
         onDispose { listener.remove() }
     }
 
-    // Diálogo para conflicto de vendedor en carrito
-    if (mostrarDialogoConflicto && itemPendiente != null) {
-        AlertDialog(
-            onDismissRequest = { mostrarDialogoConflicto = false; itemPendiente = null },
-            containerColor = DarkSurface,
-            title = { Text("Diferente vendedor", color = Color.White) },
-            text = {
-                Text("Tu carrito tiene items de \"$vendedorConflicto\". ¿Vaciar carrito y agregar este producto?",
-                    color = Color.Gray, fontSize = 14.sp)
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        CarritoRepository.vaciarYAgregar(userId, itemPendiente!!) {
-                            snackMsg = "Carrito actualizado"
-                        }
-                        mostrarDialogoConflicto = false; itemPendiente = null
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = GreenBtn)
-                ) { Text("Vaciar y agregar") }
-            },
-            dismissButton = {
-                TextButton(onClick = { mostrarDialogoConflicto = false; itemPendiente = null }) {
-                    Text("Cancelar", color = Color.Gray)
-                }
-            }
-        )
+    // Mostrar mensaje de bloqueo
+    LaunchedEffect(msgBloqueado) {
+        if (msgBloqueado.isNotEmpty()) {
+            snackState.showSnackbar(msgBloqueado)
+            msgBloqueado = ""
+        }
     }
 
     Scaffold(snackbarHost = { SnackbarHost(snackState) }, containerColor = DarkBg) { padding ->
@@ -229,8 +209,14 @@ fun TiendaScreen(
                                 }
                             }
                             Spacer(modifier = Modifier.width(10.dp))
+                            val esPropioProducto = producto.vendedorId == userId
                             FloatingActionButton(
                                 onClick = {
+                                    if (esPropioProducto) {
+                                        msgBloqueado = "🚫 No puedes comprar tus propios productos"
+                                        com.jaz.myapplicationcampuseats.service.SoundManager.playError(ctx)
+                                        return@FloatingActionButton
+                                    }
                                     if (userId.isEmpty()) return@FloatingActionButton
                                     val nuevoItem = ItemCarrito(
                                         productoId = producto.id, nombre = producto.nombre,
@@ -239,17 +225,25 @@ fun TiendaScreen(
                                     CarritoRepository.agregarProducto(
                                         userId = userId,
                                         item = nuevoItem,
-                                        onSuccess = { snackMsg = "\"${producto.nombre}\" agregado al carrito" },
-                                        onConflictoVendedor = { vendActual ->
-                                            vendedorConflicto = vendActual
-                                            itemPendiente = nuevoItem
-                                            mostrarDialogoConflicto = true
+                                        onSuccess = {
+                                            snackMsg = "\"${producto.nombre}\" agregado al carrito"
+                                            com.jaz.myapplicationcampuseats.service.SoundManager.playAgregarCarrito(ctx)
+                                        },
+                                        onBloqueado = { msg ->
+                                            msgBloqueado = msg
+                                            com.jaz.myapplicationcampuseats.service.SoundManager.playError(ctx)
                                         }
                                     )
                                 },
-                                containerColor = GreenBtn, contentColor = Color.White,
+                                containerColor = if (esPropioProducto) Color.Gray else GreenBtn,
+                                contentColor = Color.White,
                                 shape = CircleShape, modifier = Modifier.size(38.dp)
-                            ) { Icon(Icons.Default.Add, "Agregar", modifier = Modifier.size(20.dp)) }
+                            ) {
+                                Icon(
+                                    if (esPropioProducto) Icons.Default.Block else Icons.Default.Add,
+                                    if (esPropioProducto) "No disponible" else "Agregar",
+                                    modifier = Modifier.size(20.dp))
+                            }
                         }
                     }
                 }

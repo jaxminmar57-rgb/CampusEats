@@ -2,7 +2,6 @@ package com.jaz.myapplicationcampuseats.ui
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
@@ -25,7 +24,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -34,35 +32,50 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
-import com.jaz.myapplicationcampuseats.R
 import com.jaz.myapplicationcampuseats.model.Pedido
 import com.jaz.myapplicationcampuseats.model.Producto
 import com.jaz.myapplicationcampuseats.model.Usuario
 import com.jaz.myapplicationcampuseats.viewmodel.HomeViewModel
 
+data class CategoriaInfo(val nombre: String, val emoji: String)
+
 val todasCategorias = listOf(
-    Pair("Hamburguesas", R.drawable.hamburguesa),
-    Pair("Pizza",        R.drawable.pizza),
-    Pair("Pastas",       R.drawable.pastas),
-    Pair("Bebidas",      R.drawable.bebidas),
-    Pair("Ensaladas",    R.drawable.ensaladas),
-    Pair("Burritos",     R.drawable.burritos),
-    Pair("Sandwich",     R.drawable.sandwich),
-    Pair("Tacos",        R.drawable.otros),
-    Pair("Tortas",       R.drawable.otros),
-    Pair("Quesadillas",  R.drawable.otros),
-    Pair("Hot Dogs",     R.drawable.otros),
-    Pair("Sushi",        R.drawable.sushi),
-    Pair("Alitas",       R.drawable.otros),
-    Pair("Postres",      R.drawable.otros),
-    Pair("Snacks",       R.drawable.otros),
-    Pair("Desayunos",    R.drawable.otros),
-    Pair("Comida Corrida", R.drawable.otros),
-    Pair("Mariscos",     R.drawable.otros),
-    Pair("Antojitos",    R.drawable.otros),
-    Pair("Saludable",    R.drawable.ensaladas),
-    Pair("Café",         R.drawable.bebidas),
-    Pair("Otros",        R.drawable.otros)
+    // Comida rápida
+    CategoriaInfo("Hamburguesas", "🍔"), CategoriaInfo("Pizza", "🍕"),
+    CategoriaInfo("Hot Dogs", "🌭"), CategoriaInfo("Papas Fritas", "🍟"),
+    CategoriaInfo("Sandwich", "🥪"), CategoriaInfo("Alitas", "🍗"),
+    // Comida mexicana
+    CategoriaInfo("Tacos", "🌮"), CategoriaInfo("Burritos", "🌯"),
+    CategoriaInfo("Tortas", "🥖"), CategoriaInfo("Quesadillas", "🫓"),
+    CategoriaInfo("Tamales", "🫔"), CategoriaInfo("Gorditas", "🫓"),
+    CategoriaInfo("Chilaquiles", "🍳"), CategoriaInfo("Enchiladas", "🫔"),
+    CategoriaInfo("Pozole", "🍲"), CategoriaInfo("Elotes", "🌽"),
+    CategoriaInfo("Antojitos", "🇲🇽"),
+    // Internacional
+    CategoriaInfo("Sushi", "🍣"), CategoriaInfo("Pastas", "🍝"),
+    CategoriaInfo("Ramen", "🍜"), CategoriaInfo("Comida China", "🥡"),
+    CategoriaInfo("Comida Árabe", "🧆"),
+    // Platos fuertes
+    CategoriaInfo("Comida Corrida", "🍛"), CategoriaInfo("Mariscos", "🦐"),
+    CategoriaInfo("Pollo", "🍗"), CategoriaInfo("Carne Asada", "🥩"),
+    CategoriaInfo("Costillas", "🍖"),
+    // Desayuno y snacks
+    CategoriaInfo("Desayunos", "🥞"), CategoriaInfo("Snacks", "🧀"),
+    CategoriaInfo("Churros", "🥨"), CategoriaInfo("Esquites", "🌽"),
+    CategoriaInfo("Fruta", "🍓"),
+    // Bebidas
+    CategoriaInfo("Bebidas", "🥤"), CategoriaInfo("Café", "☕"),
+    CategoriaInfo("Smoothies", "🥤"), CategoriaInfo("Aguas Frescas", "🧃"),
+    CategoriaInfo("Licuados", "🥛"), CategoriaInfo("Cerveza", "🍺"),
+    // Postres
+    CategoriaInfo("Postres", "🍰"), CategoriaInfo("Helados", "🍦"),
+    CategoriaInfo("Pan Dulce", "🥐"), CategoriaInfo("Galletas", "🍪"),
+    CategoriaInfo("Pasteles", "🎂"),
+    // Saludable
+    CategoriaInfo("Ensaladas", "🥗"), CategoriaInfo("Saludable", "🥑"),
+    CategoriaInfo("Vegano", "🌱"), CategoriaInfo("Bowls", "🥣"),
+    // Otros
+    CategoriaInfo("Otros", "🍽️")
 )
 
 @Composable
@@ -82,6 +95,7 @@ fun HomeScreen(
     onAbrirPedido: (String) -> Unit,
     onAbrirChat: (pedidoId: String, otroNombre: String) -> Unit,
     onVerTienda: (vendedorId: String) -> Unit,
+    onVerPerfil: (uid: String) -> Unit = {},
     vm: HomeViewModel = viewModel()
 ) {
     val uid = usuario?.uid ?: ""
@@ -113,7 +127,7 @@ fun HomeScreen(
     }
     val categoriasConProductos = remember(productosVisibles) {
         val cats = productosVisibles.map { it.categoria }.toSet()
-        todasCategorias.filter { (nombre, _) -> nombre in cats }
+        todasCategorias.filter { it.nombre in cats }
     }
     // Populares: mejor rating + más vendidos (score compuesto)
     val populares = remember(productosVisibles) {
@@ -189,7 +203,11 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Menu, "Menú", tint = Color.White,
-                        modifier = Modifier.size(26.dp).clickable { menuAbierto = true })
+                        modifier = Modifier.size(26.dp).clickable {
+                            menuAbierto = true
+                            com.jaz.myapplicationcampuseats.service.SoundManager.playMenuOpen(
+                                (vm.getApplication() as android.app.Application).applicationContext)
+                        })
                     Text("Hola, ${usuario?.nombre?.split(" ")?.firstOrNull() ?: ""}", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (pedidosActivos.isNotEmpty()) {
@@ -312,16 +330,16 @@ fun HomeScreen(
                         modifier = Modifier.padding(horizontal = 16.dp))
                     Spacer(modifier = Modifier.height(10.dp))
                     LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        items(categoriasConProductos) { (nombre, imagen) ->
+                        items(categoriasConProductos) { cat ->
                             Column(horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.clickable { onCategoria(nombre) }) {
-                                Box(modifier = Modifier.size(62.dp).clip(CircleShape).background(DarkSurface),
+                                modifier = Modifier.clickable { onCategoria(cat.nombre) }) {
+                                Box(modifier = Modifier.size(62.dp).clip(CircleShape)
+                                    .background(DarkSurface),
                                     contentAlignment = Alignment.Center) {
-                                    Image(painterResource(id = imagen), nombre,
-                                        modifier = Modifier.size(46.dp).clip(CircleShape), contentScale = ContentScale.Crop)
+                                    Text(cat.emoji, fontSize = 30.sp)
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
-                                Text(nombre, color = Color.White, fontSize = 11.sp)
+                                Text(cat.nombre, color = Color.White, fontSize = 11.sp, maxLines = 1)
                             }
                         }
                     }
@@ -380,13 +398,21 @@ fun HomeScreen(
         // Menú lateral
         if (menuAbierto) {
             // Back handler para cerrar menú con botón atrás
-            androidx.activity.compose.BackHandler { menuAbierto = false }
+            androidx.activity.compose.BackHandler {
+                menuAbierto = false
+                com.jaz.myapplicationcampuseats.service.SoundManager.playMenuClose(
+                    (vm.getApplication() as android.app.Application).applicationContext)
+            }
 
             Box(modifier = Modifier.fillMaxSize().zIndex(10f)) {
                 // Overlay oscuro
                 Box(modifier = Modifier.fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.55f))
-                    .clickable { menuAbierto = false })
+                    .clickable {
+                        menuAbierto = false
+                        com.jaz.myapplicationcampuseats.service.SoundManager.playMenuClose(
+                            (vm.getApplication() as android.app.Application).applicationContext)
+                    })
 
                 // Panel del menú
                 Column(modifier = Modifier.fillMaxHeight().width(280.dp)
@@ -397,7 +423,11 @@ fun HomeScreen(
                     .verticalScroll(rememberScrollState())
                 ) {
                     Spacer(modifier = Modifier.height(16.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable {
+                        menuAbierto = false
+                        if (usuario?.uid?.isNotEmpty() == true) onVerPerfil(usuario.uid)
+                    }) {
                     Box(modifier = Modifier.size(52.dp).clip(CircleShape).background(DarkSurface),
                         contentAlignment = Alignment.Center) {
                         if (usuario?.fotoPerfil?.isNotEmpty() == true) {
@@ -446,7 +476,11 @@ fun HomeScreen(
                     }
                     Switch(
                         checked = negocioAbierto,
-                        onCheckedChange = { vm.toggleNegocioAbierto(it) },
+                        onCheckedChange = { nuevo ->
+                            vm.toggleNegocioAbierto(nuevo)
+                            com.jaz.myapplicationcampuseats.service.SoundManager.playToggle(
+                                (vm.getApplication() as android.app.Application).applicationContext, nuevo)
+                        },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
                             checkedTrackColor = GreenBtn,
@@ -546,6 +580,11 @@ fun PedidoActivoCard(pedido: Pedido, esDeVendedor: Boolean, onClick: () -> Unit,
             Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
+                    // Role tag
+                    Text(
+                        if (esDeVendedor) "📦 Vendiendo" else "🛒 Comprando",
+                        color = if (esDeVendedor) OrangeWarn else BlueAceptado,
+                        fontSize = 9.sp, fontWeight = FontWeight.Bold)
                     Text(if (esDeVendedor) "👤 ${pedido.nombreCliente}" else "🏪 ${pedido.nombreVendedor}",
                         color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                     if (resumen.isNotEmpty()) {
@@ -661,7 +700,11 @@ fun ProductoMiniCard(producto: Producto, modifier: Modifier = Modifier, onClick:
 
 @Composable
 fun MenuOpcion(icono: ImageVector, texto: String, tint: Color = Color.White, onClick: () -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+    val menuCtx = androidx.compose.ui.platform.LocalContext.current
+    Row(modifier = Modifier.fillMaxWidth().clickable {
+        com.jaz.myapplicationcampuseats.service.SoundManager.playClick(menuCtx)
+        onClick()
+    }.padding(vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(icono, texto, tint = tint, modifier = Modifier.size(21.dp))
         Spacer(modifier = Modifier.width(14.dp))
         Text(texto, color = tint, fontSize = 15.sp)

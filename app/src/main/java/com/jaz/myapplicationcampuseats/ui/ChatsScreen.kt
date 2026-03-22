@@ -1,8 +1,6 @@
 package com.jaz.myapplicationcampuseats.ui
 
 import android.content.Context
-import android.media.AudioAttributes
-import android.media.SoundPool
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -95,18 +93,7 @@ fun ChatsScreen(
 }
 
 fun reproducirSonidoMensaje(context: Context) {
-    try {
-        val sp = SoundPool.Builder().setMaxStreams(1)
-            .setAudioAttributes(AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()).build()
-        val uri = android.provider.Settings.System.DEFAULT_NOTIFICATION_URI
-        val afd = context.contentResolver.openAssetFileDescriptor(uri, "r")
-        if (afd != null) {
-            val soundId = sp.load(afd.fileDescriptor, afd.startOffset, afd.length, 1)
-            sp.setOnLoadCompleteListener { pool, sId, _ -> pool.play(sId, 1f, 1f, 1, 0, 1f); afd.close() }
-        }
-    } catch (_: Exception) {}
+    com.jaz.myapplicationcampuseats.service.SoundManager.playMensaje(context)
 }
 
 @Composable
@@ -118,6 +105,15 @@ fun ChatResumenCard(
     onClick: () -> Unit
 ) {
     val info = estadoInfo(pedido.estado)
+    val esVendedor = rolPropio == "Vendedor"
+
+    // Colores por rol
+    val roleColor = if (esVendedor) OrangeWarn else BlueAceptado
+    val roleEmoji = if (esVendedor) "📦" else "🛒"
+    val roleLabel = if (esVendedor) "Vendiendo" else "Comprando"
+    val cardBorder = if (mensajesNuevos > 0)
+        androidx.compose.foundation.BorderStroke(1.5.dp, roleColor.copy(alpha = 0.5f))
+    else null
 
     val descripcionItems = remember(pedido.items) {
         val nombres = pedido.items.take(2).mapNotNull { it["nombre"] as? String }
@@ -125,22 +121,39 @@ fun ChatResumenCard(
         nombres.joinToString(", ") + extra
     }
 
+    // Fetch other user's photo
+    val otroUid = if (esVendedor) pedido.clienteId else pedido.vendedorId
+    var fotoOtro by remember { mutableStateOf("") }
+    LaunchedEffect(otroUid) {
+        if (otroUid.isNotEmpty()) {
+            com.jaz.myapplicationcampuseats.repository.UsuarioRepository.obtenerUsuario(otroUid,
+                onSuccess = { fotoOtro = it.fotoPerfil })
+        }
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth().clickable { onClick() },
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = DarkSurface),
-        border = if (mensajesNuevos > 0)
-            androidx.compose.foundation.BorderStroke(1.dp, GreenBtn.copy(alpha = 0.5f))
-        else null
+        border = cardBorder
     ) {
         Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
 
-            // Avatar con badge
+            // Avatar with photo or initial
             Box(contentAlignment = Alignment.TopEnd) {
-                Box(modifier = Modifier.size(46.dp).clip(CircleShape).background(DarkSurface2),
+                Box(modifier = Modifier.size(46.dp).clip(CircleShape)
+                    .background(if (esVendedor) OrangeWarn.copy(alpha = 0.15f) else BlueAceptado.copy(alpha = 0.15f)),
                     contentAlignment = Alignment.Center) {
-                    Text(otroNombre.firstOrNull()?.uppercase() ?: "?",
-                        color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    if (fotoOtro.isNotEmpty()) {
+                        coil.compose.AsyncImage(
+                            model = fotoOtro, contentDescription = otroNombre,
+                            modifier = Modifier.fillMaxSize().clip(CircleShape),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                        )
+                    } else {
+                        Text(otroNombre.firstOrNull()?.uppercase() ?: "?",
+                            color = roleColor, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
                 if (mensajesNuevos > 0) {
                     Box(modifier = Modifier.size(18.dp).clip(CircleShape).background(RedCancel),
@@ -154,6 +167,9 @@ fun ChatResumenCard(
             Spacer(modifier = Modifier.width(12.dp))
 
             Column(modifier = Modifier.weight(1f)) {
+                // Role tag on top
+                Text("$roleEmoji $roleLabel", color = roleColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+
                 Row(modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically) {
@@ -163,16 +179,11 @@ fun ChatResumenCard(
                 }
                 Spacer(modifier = Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Surface(shape = RoundedCornerShape(4.dp), color = GreenBtn.copy(alpha = 0.2f)) {
-                        Text(rolPropio, color = GreenBtn, fontSize = 10.sp, fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
-                    }
                     Surface(shape = RoundedCornerShape(4.dp), color = info.color.copy(alpha = 0.15f)) {
                         Text(pedido.estado.replaceFirstChar { it.uppercase() }.replace("_", " "),
                             color = info.color, fontSize = 10.sp, fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
                     }
-                    // Chip de tipo de entrega
                     Surface(shape = RoundedCornerShape(4.dp), color = when (pedido.preferenciaEntrega) {
                         "vendedor_lleva" -> TealListo.copy(alpha = 0.15f)
                         "cliente_recoge" -> OrangeWarn.copy(alpha = 0.15f)
@@ -201,7 +212,7 @@ fun ChatResumenCard(
             }
 
             Spacer(modifier = Modifier.width(8.dp))
-            Icon(Icons.Default.ChevronRight, null, tint = Color.Gray, modifier = Modifier.size(20.dp))
+            Icon(Icons.Default.ChevronRight, "Abrir", tint = Color.Gray, modifier = Modifier.size(20.dp))
         }
     }
 }

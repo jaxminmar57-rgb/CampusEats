@@ -33,8 +33,9 @@ fun CarritoScreen(
 ) {
     var items        by remember { mutableStateOf<List<ItemCarrito>>(emptyList()) }
     var cargando     by remember { mutableStateOf(true) }
+    val carritoCtx = androidx.compose.ui.platform.LocalContext.current
     var metodoPago   by remember { mutableStateOf("efectivo") }
-    var notas        by remember { mutableStateOf("") }
+    var notasVendedor by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var creandoPedido by remember { mutableStateOf(false) }
     var error        by remember { mutableStateOf("") }
 
@@ -42,17 +43,22 @@ fun CarritoScreen(
     var preferenciasVendedor by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     // Mapa vendedorId → datos del vendedor (para mostrar ubicación)
     var datosVendedor by remember { mutableStateOf<Map<String, Usuario>>(emptyMap()) }
+    // Set de vendedores con negocio cerrado
+    var vendedoresCerrados by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     LaunchedEffect(userId) {
         CarritoRepository.obtenerCarrito(userId) { lista ->
             items = lista
             cargando = false
-            // Cargar preferencias de TODOS los vendedores del carrito
+            // Cargar preferencias y estado abierto/cerrado de TODOS los vendedores del carrito
             val vendedorIds = lista.map { it.vendedorId }.toSet()
             vendedorIds.forEach { vid ->
                 UsuarioRepository.obtenerUsuario(vid, onSuccess = { vendedor ->
                     preferenciasVendedor = preferenciasVendedor + (vid to vendedor.preferenciaEntrega)
                     datosVendedor = datosVendedor + (vid to vendedor)
+                    if (!vendedor.negocioAbierto) {
+                        vendedoresCerrados = vendedoresCerrados + vid
+                    }
                 })
             }
         }
@@ -77,7 +83,10 @@ fun CarritoScreen(
             Text("Mi carrito", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.weight(1f))
             if (items.isNotEmpty()) {
-                TextButton(onClick = { CarritoRepository.vaciarCarrito(userId); items = emptyList() }) {
+                TextButton(onClick = {
+                    CarritoRepository.vaciarCarrito(userId); items = emptyList()
+                    com.jaz.myapplicationcampuseats.service.SoundManager.playEliminar(carritoCtx)
+                }) {
                     Text("Vaciar", color = RedCancel, fontSize = 13.sp)
                 }
             }
@@ -117,13 +126,15 @@ fun CarritoScreen(
                 val prefEntrega = preferenciasVendedor[vendedorId] ?: "cliente_recoge"
                 val infoVendedor = datosVendedor[vendedorId]
                 val nombreVend = itemsVendedor.first().nombreVendedor
+                val estaCerrado = vendedorId in vendedoresCerrados
 
                 // Cabecera del vendedor con su preferencia de entrega
                 item {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = DarkSurface)
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (estaCerrado) Color(0xFF3A1A1A) else DarkSurface)
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Row(
@@ -131,10 +142,21 @@ fun CarritoScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text(
-                                    "🏪 $nombreVend",
-                                    color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        "🏪 $nombreVend",
+                                        color = if (estaCerrado) Color.Gray else Color.White,
+                                        fontSize = 14.sp, fontWeight = FontWeight.Bold
+                                    )
+                                    if (estaCerrado) {
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Surface(shape = RoundedCornerShape(6.dp), color = RedCancel.copy(alpha = 0.3f)) {
+                                            Text("🔴 CERRADO", color = RedCancel, fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                                        }
+                                    }
+                                }
                                 // Chip de entrega
                                 Surface(
                                     shape = RoundedCornerShape(8.dp),
@@ -170,6 +192,21 @@ fun CarritoScreen(
                                         color = OrangeWarn, fontSize = 12.sp)
                                 }
                             }
+                            // Botón quitar items de vendedor cerrado
+                            if (estaCerrado) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                OutlinedButton(
+                                    onClick = {
+                                        CarritoRepository.eliminarItemsDeVendedor(userId, vendedorId) {
+                                            items = items.filter { it.vendedorId != vendedorId }
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth().height(36.dp),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text("🗑️ Quitar productos de este vendedor", color = RedCancel, fontSize = 12.sp)
+                                }
+                            }
                         }
                     }
                 }
@@ -189,6 +226,21 @@ fun CarritoScreen(
                             }.filter { it.cantidad > 0 }
                         }
                     )
+                }
+
+                // Notas para ESTE vendedor
+                item {
+                    val notaActual = notasVendedor[vendedorId] ?: ""
+                    OutlinedTextField(
+                        value = notaActual,
+                        onValueChange = { notasVendedor = notasVendedor + (vendedorId to it) },
+                        placeholder = { Text("Nota para $nombreVend (opcional)...", color = Color.Gray) },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = camposColores(), maxLines = 2,
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
             }
 
@@ -212,51 +264,53 @@ fun CarritoScreen(
                 )
             }
 
-            // Notas
-            item {
-                Spacer(modifier = Modifier.height(12.dp))
-                Text("Notas para el vendedor (opcional)", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = notas, onValueChange = { notas = it },
-                    placeholder = { Text("Ej: sin cebolla, punto de cocción...", color = Color.Gray) },
-                    modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp),
-                    colors = camposColores(), maxLines = 3
-                )
-            }
-
             if (error.isNotEmpty()) {
                 item { Text(error, color = RedCancel, fontSize = 13.sp) }
             }
         }
 
         // Resumen y botón confirmar
+        val hayVendedoresCerrados = vendedoresCerrados.any { vid -> items.any { it.vendedorId == vid } }
+        val itemsValidos = items.filter { it.vendedorId !in vendedoresCerrados }
+        val totalValido = itemsValidos.sumOf { it.precio * it.cantidad }
+        val gruposValidos = itemsValidos.groupBy { it.vendedorId }
+
         Column(
             modifier = Modifier.fillMaxWidth().background(DarkCard).padding(16.dp)
         ) {
+            if (hayVendedoresCerrados) {
+                Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text("⚠️", fontSize = 14.sp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Algunos vendedores cerraron. Quita esos productos para continuar.",
+                        color = OrangeWarn, fontSize = 12.sp)
+                }
+            }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Total", color = Color.Gray, fontSize = 15.sp)
-                Text("\$${String.format("%.2f", total)}", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text("\$${String.format("%.2f", totalValido)}", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             }
-            if (gruposPorVendedor.size > 1) {
+            if (gruposValidos.size > 1) {
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("Se creará un pedido por cada vendedor (${gruposPorVendedor.size})",
+                Text("Se creará un pedido por cada vendedor (${gruposValidos.size})",
                     color = Color.Gray, fontSize = 12.sp)
             }
             Spacer(modifier = Modifier.height(12.dp))
             Button(
                 onClick = {
                     creandoPedido = true; error = ""
-                    // Crear un pedido por cada grupo de vendedor
-                    val grupos = gruposPorVendedor.entries.toList()
+                    com.jaz.myapplicationcampuseats.service.SoundManager.playConfirmarPedido(carritoCtx)
+                    val grupos = gruposValidos.entries.toList()
                     var confirmados = 0
                     var ultimoPedidoId = ""
                     grupos.forEach { (vendedorId, itemsGrupo) ->
                         val prefEntrega = preferenciasVendedor[vendedorId] ?: "cliente_recoge"
+                        val notasVend = notasVendedor[vendedorId] ?: ""
                         PedidoRepository.crearPedido(
                             clienteId = userId, nombreCliente = nombreCliente,
                             items = itemsGrupo, metodoPago = metodoPago,
-                            notas = notas, preferenciaEntrega = prefEntrega,
+                            notas = notasVend, preferenciaEntrega = prefEntrega,
                             onSuccess = { pedidoId ->
                                 ultimoPedidoId = pedidoId
                                 confirmados++
@@ -273,10 +327,13 @@ fun CarritoScreen(
                 modifier = Modifier.fillMaxWidth().height(50.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = GreenBtn),
-                enabled = !creandoPedido && items.isNotEmpty()
+                enabled = !creandoPedido && itemsValidos.isNotEmpty() && !hayVendedoresCerrados
             ) {
                 if (creandoPedido) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(22.dp))
-                else Text("Confirmar pedido", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                else Text(
+                    if (hayVendedoresCerrados) "Quita productos cerrados primero"
+                    else "Confirmar pedido",
+                    fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
         }
     }

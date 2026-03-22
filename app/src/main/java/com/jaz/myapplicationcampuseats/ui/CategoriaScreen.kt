@@ -38,9 +38,7 @@ fun CategoriaScreen(
     var cargando by remember { mutableStateOf(true) }
     var snackMessage by remember { mutableStateOf("") }
     val snackbarHostState = remember { SnackbarHostState() }
-    var mostrarDialogoConflicto by remember { mutableStateOf(false) }
-    var vendedorConflicto by remember { mutableStateOf("") }
-    var itemPendiente by remember { mutableStateOf<ItemCarrito?>(null) }
+    val catCtx = androidx.compose.ui.platform.LocalContext.current
 
     DisposableEffect(categoria) {
         val listener = ProductoRepository.escucharProductosPorCategoria(categoria) { lista ->
@@ -55,30 +53,6 @@ fun CategoriaScreen(
             snackbarHostState.showSnackbar(snackMessage)
             snackMessage = ""
         }
-    }
-
-    // Diálogo conflicto vendedor
-    if (mostrarDialogoConflicto && itemPendiente != null) {
-        AlertDialog(
-            onDismissRequest = { mostrarDialogoConflicto = false; itemPendiente = null },
-            containerColor = DarkSurface,
-            title = { Text("Diferente vendedor", color = Color.White) },
-            text = { Text("Tu carrito tiene items de \"$vendedorConflicto\". ¿Vaciar carrito y agregar este producto?",
-                color = Color.Gray, fontSize = 14.sp) },
-            confirmButton = {
-                Button(onClick = {
-                    CarritoRepository.vaciarYAgregar(usuarioId, itemPendiente!!) {
-                        snackMessage = "Carrito actualizado"
-                    }
-                    mostrarDialogoConflicto = false; itemPendiente = null
-                }, colors = ButtonDefaults.buttonColors(containerColor = GreenBtn)) { Text("Vaciar y agregar") }
-            },
-            dismissButton = {
-                TextButton(onClick = { mostrarDialogoConflicto = false; itemPendiente = null }) {
-                    Text("Cancelar", color = Color.Gray)
-                }
-            }
-        )
     }
 
     Scaffold(
@@ -138,11 +112,13 @@ fun CategoriaScreen(
                                 CarritoRepository.agregarProducto(
                                     userId = usuarioId,
                                     item = item,
-                                    onSuccess = { snackMessage = "\"${producto.nombre}\" agregado al carrito" },
-                                    onConflictoVendedor = { vendActual ->
-                                        vendedorConflicto = vendActual
-                                        itemPendiente = item
-                                        mostrarDialogoConflicto = true
+                                    onSuccess = {
+                                        snackMessage = "\"${producto.nombre}\" agregado al carrito"
+                                        com.jaz.myapplicationcampuseats.service.SoundManager.playAgregarCarrito(catCtx)
+                                    },
+                                    onBloqueado = { msg ->
+                                        snackMessage = "🚫 $msg"
+                                        com.jaz.myapplicationcampuseats.service.SoundManager.playError(catCtx)
                                     }
                                 )
                             },

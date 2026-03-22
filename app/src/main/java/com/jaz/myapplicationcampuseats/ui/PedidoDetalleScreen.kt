@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -41,6 +42,7 @@ fun PedidoDetalleScreen(
     vm: PedidoDetalleViewModel = viewModel()
 ) {
     val uid = usuarioActual?.uid ?: ""
+    val ctx = LocalContext.current
     var mostrarDialogoResena by remember { mutableStateOf(false) }
     var mostrarConfirmCancelar by remember { mutableStateOf(false) }
 
@@ -98,7 +100,8 @@ fun PedidoDetalleScreen(
             confirmButton = {
                 Button(onClick = {
                     mostrarConfirmCancelar = false
-                    vm.cambiarEstado("cancelado")
+                    vm.cambiarEstado("cancelado", uid = uid)
+                    com.jaz.myapplicationcampuseats.service.SoundManager.playError(ctx)
                 }, colors = ButtonDefaults.buttonColors(containerColor = RedCancel)) {
                     Text("Sí, cancelar")
                 }
@@ -268,9 +271,9 @@ fun PedidoDetalleScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     AccionesVendedor(
                         estado = p.estado, procesando = procesando, vendedorConfirmo = p.vendedorConfirmoEntrega,
-                        onAceptar = { vm.cambiarEstado("aceptado") },
-                        onEspera  = { vm.cambiarEstado("en_espera") },
-                        onListo   = { vm.cambiarEstado("listo") },
+                        onAceptar = { vm.cambiarEstado("aceptado"); com.jaz.myapplicationcampuseats.service.SoundManager.playExito(ctx) },
+                        onEspera  = { vm.cambiarEstado("en_espera"); com.jaz.myapplicationcampuseats.service.SoundManager.hapticMedium(ctx) },
+                        onListo   = { vm.cambiarEstado("listo"); com.jaz.myapplicationcampuseats.service.SoundManager.playExito(ctx) },
                         onCancelar = { mostrarConfirmCancelar = true },
                         onConfirmarEntrega = { vm.vendedorConfirma() }
                     )
@@ -286,7 +289,7 @@ fun PedidoDetalleScreen(
                         else -> "Confirmar entrega"
                     }
                     Button(
-                        onClick = { vm.clienteConfirma() },
+                        onClick = { vm.clienteConfirma(); com.jaz.myapplicationcampuseats.service.SoundManager.playExito(ctx) },
                         modifier = Modifier.fillMaxWidth().height(50.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = GreenBtn),
@@ -446,6 +449,7 @@ fun DialogoResena(
     AlertDialog(onDismissRequest = onDismiss, containerColor = DarkSurface,
         title = { Text("Calificar a $destinatarioNombre", color = Color.White) },
         text = {
+            val starCtx = LocalContext.current
             Column {
                 Text("¿Cómo fue tu experiencia?", color = Color.Gray, fontSize = 13.sp)
                 if (!esVendedor) {
@@ -454,7 +458,10 @@ fun DialogoResena(
                 Spacer(modifier = Modifier.height(12.dp))
                 Row {
                     (1..5).forEach { i ->
-                        IconButton(onClick = { estrellas = i }, modifier = Modifier.size(36.dp)) {
+                        IconButton(onClick = {
+                            estrellas = i
+                            com.jaz.myapplicationcampuseats.service.SoundManager.playEstrella(starCtx)
+                        }, modifier = Modifier.size(36.dp)) {
                             Text(if (i <= estrellas) "⭐" else "☆", fontSize = 22.sp)
                         }
                     }

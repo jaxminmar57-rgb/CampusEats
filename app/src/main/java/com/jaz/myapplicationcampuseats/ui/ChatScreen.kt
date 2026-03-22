@@ -53,6 +53,7 @@ fun ChatScreen(
 
     val uid    = usuarioActual?.uid    ?: ""
     val nombre = usuarioActual?.nombre ?: ""
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     // Registrar/limpiar chat activo (suprime notificaciones de este chat)
     DisposableEffect(pedidoId) {
@@ -108,17 +109,25 @@ fun ChatScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(Color(0xFF16213E))
+                .statusBarsPadding()
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onVolver) {
                     Icon(Icons.Default.ArrowBack, "Volver", tint = Color.White)
                 }
                 Column(modifier = Modifier.weight(1f)) {
+                    // Role tag + name
+                    pedido?.let { p ->
+                        val esVendedorChat = uid == p.vendedorId
+                        val roleLabel = if (esVendedorChat) "📦 Vendiendo a" else "🛒 Comprando a"
+                        val roleColor = if (esVendedorChat) OrangeWarn else BlueAceptado
+                        Text(roleLabel, color = roleColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
                     Text(otroNombre, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     pedido?.let { p ->
                         val info = estadoInfo(p.estado)
@@ -187,6 +196,18 @@ fun ChatScreen(
             items(mensajes) { mensaje ->
                 val esPropio = mensaje.autorId == uid
                 val hora = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(mensaje.timestamp))
+                // Determinar si el autor es vendedor o cliente
+                val esVendedorMsg = pedido?.let { mensaje.autorId == it.vendedorId } ?: false
+
+                // Colores según rol
+                val bubbleColor = when {
+                    esPropio && esVendedorMsg -> Color(0xFF1B5E20) // verde oscuro (yo como vendedor)
+                    esPropio -> Color(0xFF0D47A1) // azul oscuro (yo como cliente)
+                    esVendedorMsg -> Color(0xFF2E4F2E) // verde sutil (vendedor)
+                    else -> Color(0xFF1A3A5C) // azul sutil (cliente)
+                }
+                val nameColor = if (esVendedorMsg) GreenBtn else BlueAceptado
+                val roleTag = if (esVendedorMsg) "🏪" else "👤"
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -197,13 +218,14 @@ fun ChatScreen(
                         modifier = Modifier.widthIn(max = 280.dp)
                     ) {
                         if (!esPropio) {
-                            Text(mensaje.autorNombre, color = Color.Gray, fontSize = 11.sp,
+                            Text("$roleTag ${mensaje.autorNombre}", color = nameColor, fontSize = 11.sp,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                                 modifier = Modifier.padding(bottom = 2.dp, start = 4.dp))
                         }
                         Box(
                             modifier = Modifier
                                 .background(
-                                    color = if (esPropio) GreenBtn else DarkSurface,
+                                    color = bubbleColor,
                                     shape = RoundedCornerShape(
                                         topStart = 16.dp, topEnd = 16.dp,
                                         bottomStart = if (esPropio) 16.dp else 4.dp,
@@ -274,7 +296,7 @@ fun ChatScreen(
                             texto = msg, timestamp = System.currentTimeMillis()
                         ),
                         destinatarioUid = destinatarioUid,
-                        onSuccess = { texto = ""; enviando = false },
+                        onSuccess = { texto = ""; enviando = false; com.jaz.myapplicationcampuseats.service.SoundManager.playEnviar(context) },
                         onError   = { enviando = false }
                     )
                 },
